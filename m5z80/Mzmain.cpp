@@ -900,8 +900,49 @@ void * keyin_thread(void *arg)
     
     if (Serial.available() > 0) {
       serialKeyCode = Serial.read();
-      while(Serial.read() != -1);
-      //Serial.printf("%d",serialKeyCode);
+      
+      //Special Key
+      if( serialKeyCode == 27 ){ //ESC
+        serialKeyCode = Serial.read();
+        if(serialKeyCode == 91){
+          serialKeyCode = Serial.read();
+          switch(serialKeyCode){
+            case 65:
+              serialKeyCode = 0x12;  //UP
+              break;
+            case 66:
+              serialKeyCode = 0x11;  //DOWN
+              break;
+            case 67:
+              serialKeyCode = 0x13;  //RIGHT
+              break;
+            case 68:
+              serialKeyCode = 0x14;  //LEFT
+              break;
+            case 49:
+              serialKeyCode = 0x15;  //HOME
+              break;
+            case 52:
+              serialKeyCode = 0x16;  //END -> CLR
+              break;
+            case 50:
+              serialKeyCode = 0x18;  //INST
+              break;
+            default:
+              serialKeyCode = 0;
+          }
+        }else if(serialKeyCode == 255)
+        {
+          //Serial.println("ESC");
+          //serialKeyCode = 0x03;  //ESC -> SHIFT + BREAK 
+          webCommandBreakFlag = true; //うまくキーコード処理できなかったのでWebからのBreak送信扱いにします。
+          serialKeyCode = 0;
+        }
+      }
+      if(serialKeyCode == 127){ //BackSpace
+        serialKeyCode = 0x17;
+      }
+      while(Serial.available() > 0 && Serial.read() != -1);
     }
     
     inKeyCode = serialKeyCode;
@@ -1246,8 +1287,8 @@ String makePage(String message) {
 String s = "<!DOCTYPE html><meta charset=\"UTF-8\" /><meta name=\"viewport\" content=\"width=device-width\"><html><head>" 
 "<title>MZ-80K/C for M5Stack Setting</title>"
 "</head>" 
-"<body>" 
-"<button onclick=\"location.href='/'\">Reload</button><hr/>";
+"<body onLoad=\"document.commandForm.commandString.focus()\">" 
+"<button onClick=\"location.href='/'\">Reload</button><hr/>";
 if (message.length() > 0){
   s+= "<span style='color:red;'>" + message + "</span><hr/>";
 }
@@ -1271,7 +1312,7 @@ s += "</select>"
 "<input type='submit' value='TAPE PLAY'>" 
 "</form>" 
 "<hr/>" 
-"<form action='/sendCommand' method='post'>" 
+"<form name='commandForm' action='/sendCommand' method='post'>" 
 "<input type='text' name='commandString'>" 
 "<input type='submit' value='SEND COMMAND'>" 
 "</form>" 

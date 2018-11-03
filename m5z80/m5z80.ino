@@ -30,6 +30,13 @@ void setup() {
   }else{
     mzConfig.forceAccessPoint = false;
   }
+
+  mzConfig.enableSound = false; //起動時はサウンドOFF
+  
+  //Speaker Setup
+  ledcSetup(LEDC_CHANNEL_0, LEDC_BASE_FREQ, LEDC_TIMER_13_BIT);
+  ledcAttachPin(SPEAKER_PIN, LEDC_CHANNEL_0);
+  
   mz80c_main();   
   saveConfig();
   exit(0);  

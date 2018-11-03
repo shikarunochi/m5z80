@@ -468,13 +468,14 @@ void play8253(void)
 {
 //	//int freq2,freqtmp;
 	int freqtmp;
-
+  int freq2;
 //	// サウンドを鳴らす
 	freqtmp = _8253_stat[0].counter_base;		
 	if (_8253_dat.makesound == 0) {
 	  _8253_dat.setsound = 0;
 		//mzbeep_stop();
     //M5.Speaker.mute();
+    ledcWriteTone(LEDC_CHANNEL_0, 0); // stop the tone playing:
 	}
 	else
 	if (freqtmp>=0) {
@@ -485,12 +486,18 @@ void play8253(void)
     //Serial.println(freqtmp);
     //M5.Speaker.mute();
     //M5.Speaker.tone(freqtmp);
+    if(mzConfig.enableSound){
+      ledcWriteTone(LEDC_CHANNEL_0, 1000000 / freqtmp);
+    }
+    //Serial.print("PLAY:");
+    //Serial.println(1000000 / freqtmp);
 	}
 	else
 	{
 		// stop
 		//mzbeep_stop();
     //M5.Speaker.mute();
+    ledcWriteTone(LEDC_CHANNEL_0, 0); // stop the tone playing:
 	}
 }
 

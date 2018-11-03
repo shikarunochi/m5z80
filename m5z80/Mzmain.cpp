@@ -128,6 +128,7 @@ void sendCommand();
 void sendBreakCommand();
 void setWiFi();
 void deleteWiFi();
+void soundSetting();
 void doSendCommand(String inputString);
 
 enum{
@@ -1175,6 +1176,7 @@ bool startWebServer(){
   webServer.on("/sendBreakCommand", sendBreakCommand) ;
   webServer.on("/setWiFi", setWiFi);
   webServer.on("/deleteWiFi",deleteWiFi);
+  webServer.on("/soundSetting",soundSetting);
   webServer.on("/", []() {
     webServer.send(200, "text/html", makePage(""));
   });
@@ -1283,6 +1285,18 @@ void deleteWiFi(){
   mz_exit(0);//再起動する。設定のセーブはプログラム終了時に行われる
 }
 
+void soundSetting(){
+  String enableSound = urlDecode(webServer.arg("enableSound"));
+  if(enableSound.toInt()==1){
+    mzConfig.enableSound = true;
+  }else{
+    mzConfig.enableSound = false;
+    ledcWriteTone(LEDC_CHANNEL_0, 0);
+  }
+  String message = String("Set Sound[ ") + (mzConfig.enableSound?String("ON"):String("OFF"))  + String(" ] Done.");
+  webServer.send(200, "text/html", makePage(message));
+}
+
 String makePage(String message) {
 String s = "<!DOCTYPE html><meta charset=\"UTF-8\" /><meta name=\"viewport\" content=\"width=device-width\"><html><head>" 
 "<title>MZ-80K/C for M5Stack Setting</title>"
@@ -1320,7 +1334,16 @@ s += "</select>"
 "<form action='/sendBreakCommand' method='post'>" 
 "<input type='submit' value='SEND SHIFT+BREAK'>" 
 "</form>" 
-"<hr/>";
+"<hr/>"
+"<div style='display:inline-flex'>"
+"<form action='/soundSetting' method='post'>" 
+"<input type='hidden' name='enableSound' value='1'>"
+"<input type='submit' value='Sound ON'>" 
+"</form> "
+"<form action='/soundSetting' method='post'>" 
+"<input type='hidden' name='enableSound' value='0'>"
+"<input type='submit' value='Sound OFF'>" 
+"</form></div>" ;
 
 //"<hr/>" 
 //"<form action='/crtColorChange' method='post'>" 
@@ -1329,7 +1352,8 @@ s += "</select>"
 //"<hr/>" 
 s += "<hr/>";
 s += "ROM:" + String(mzConfig.romFile) + "<br/>";
-s += "TAPE:" + String(mzConfig.tapeFile) + "<br/>"; 
+s += "TAPE:" + String(mzConfig.tapeFile) + "<br/>";
+s += "SOUND:" + (mzConfig.enableSound?String("ON"):String("OFF")) + "<br/>";
 //s += "MZ MODE:" 
 //"CRT COLOR:" 
 //"Wi-Fi:" 

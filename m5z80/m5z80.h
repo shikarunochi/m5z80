@@ -90,3 +90,12 @@ enum MSGQID
 #define DEFAULT_ROM_FILE  "NEWMON.ROM"
 #define DEFAULT_TAPE_FILE  "WH_newmon.mzt"
 #define DEFAULT_FONT_FILE  "MZ700FON.JP"
+
+// use first channel of 16 channels (started from zero)
+#define LEDC_CHANNEL_0     0
+// use 13 bit precission for LEDC timer
+#define LEDC_TIMER_13_BIT  13
+// use 5000 Hz as a LEDC base frequency
+#define LEDC_BASE_FREQ     5000
+// SPEAKER PIN
+#define SPEAKER_PIN        25

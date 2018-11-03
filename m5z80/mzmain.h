@@ -124,6 +124,7 @@ typedef struct
   char ssid[50 + 1];
   char pass[50 + 1];
   bool forceAccessPoint;
+  bool enableSound;
 } MZ_CONFIG;
 
 void loadConfig();

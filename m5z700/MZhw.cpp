@@ -1169,7 +1169,8 @@ void mmio_out(int addr,int val)
 		if ((val & (16+32))==(16+32))
 		{
 			/* ＣＧ→ＰＣＧコピー */
-			i = (hw700.pcg8000_addr & 0x3FF) | 0x400;
+      i = hw700.pcg8000_addr & 2047;
+			//i = (hw700.pcg8000_addr & 0x3FF) | 0x400;
       if (i & 1024) i=2048+i;
       else i=1024+i;
       

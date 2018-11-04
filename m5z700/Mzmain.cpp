@@ -47,8 +47,10 @@ extern "C" {
 #include "mzscrn.h"
 //#include "mzbeep.h"
 #include <WebServer.h>
-//#include <WiFiMulti.h>
+#include <WiFiMulti.h>
 
+WiFiMulti wifiMulti;
+    
 static bool intFlag = false;
 
 static pthread_t scrn_thread_id;
@@ -158,6 +160,7 @@ void sendBreakCommand();
 void setWiFi();
 void deleteWiFi();
 void soundSetting();
+void PCGSetting();
 void doSendCommand(String inputString);
 int set_mztype(void);
 
@@ -1174,8 +1177,8 @@ bool startWebServer(){
     Serial.print("IP Address:" + String(apIP));
 
     WiFi.mode(WIFI_MODE_STA);
-    WiFi.disconnect();
-    delay(100);
+    WiFi.disconnect(true);
+    delay(1000);
     WiFi.softAPConfig(apIP, apIP, IPAddress(255, 255, 255, 0));
     WiFi.softAP(apSSID);
     WiFi.mode(WIFI_MODE_AP);
@@ -1184,25 +1187,44 @@ bool startWebServer(){
   }else{
     String message = "Starting WebServer...";
     updateStatusArea(message.c_str());
-    WiFi.disconnect();
-    delay(100);
+    WiFi.disconnect(true);
+    delay(1000);
+    WiFi.mode(WIFI_STA);
+    wifiMulti.addAP(mzConfig.ssid, mzConfig.pass);
+    Serial.println("Connecting Wifi...");
     Serial.print("Web Server Setting");
     Serial.print("SSID:" + String(mzConfig.ssid));
-   //Serial.print("PASS:" + String(mzConfig.pass));
-    Serial.print("WiFi:Start");
-    
-    WiFi.begin(mzConfig.ssid, mzConfig.pass);
-    uint32_t WIFItimeOut = millis();
-    while (WiFi.status() != WL_CONNECTED) {
-      delay(500);
-      Serial.print(".");
-      if( millis() - WIFItimeOut > 20000 ) {
-        message = "Connection Fail:" + String(mzConfig.ssid);
-        updateStatusArea(message.c_str());
-        suspendScrnThreadFlag = false;
-        return false;
-      }
+    if(wifiMulti.run() == WL_CONNECTED) {
+      Serial.println("");
+      Serial.println("WiFi connected");
+      Serial.println("IP address: ");
+      Serial.println(WiFi.localIP());
+    }else{
+      message = "Connection Fail:" + String(mzConfig.ssid);
+      updateStatusArea(message.c_str());
+      suspendScrnThreadFlag = false;
+      return false;
     }
+    
+//    WiFi.disconnect();
+//    delay(100);
+//    Serial.print("Web Server Setting");
+//    Serial.print("SSID:" + String(mzConfig.ssid));
+//   //Serial.print("PASS:" + String(mzConfig.pass));
+//    Serial.print("WiFi:Start");
+//    
+//    WiFi.begin(mzConfig.ssid, mzConfig.pass);
+//    uint32_t WIFItimeOut = millis();
+//    while (WiFi.status() != WL_CONNECTED) {
+//      delay(500);
+//      Serial.print(".");
+//      if( millis() - WIFItimeOut > 20000 ) {
+//        message = "Connection Fail:" + String(mzConfig.ssid);
+//        updateStatusArea(message.c_str());
+//        suspendScrnThreadFlag = false;
+//        return false;
+//      }
+//    }
     Serial.println();
     Serial.println("WiFi connected");
     //M5.Lcd.println("Wi-Fi Connected");
@@ -1237,6 +1259,7 @@ bool startWebServer(){
   webServer.on("/setWiFi", setWiFi);
   webServer.on("/deleteWiFi",deleteWiFi);
   webServer.on("/soundSetting",soundSetting);
+  webServer.on("/PCGSetting",PCGSetting);
   webServer.on("/", []() {
     webServer.send(200, "text/html", makePage(""));
   });
@@ -1257,7 +1280,7 @@ bool stopWebServer(){
   //webServer.close();
   Serial.println("WiFi:Disconnect");
 
-  WiFi.disconnect(); 
+  WiFi.disconnect(true); 
   updateStatusArea("");
   
   suspendScrnThreadFlag = false;
@@ -1357,6 +1380,17 @@ void soundSetting(){
   webServer.send(200, "text/html", makePage(message));
 }
 
+void PCGSetting(){
+  String enablePCG = urlDecode(webServer.arg("enablePCG"));
+  if(enablePCG.toInt()==1){
+        hw700.pcg8000_mode = 1;
+  }else{
+      hw700.pcg8000_mode = 0;
+  }
+  String message = String("Set PCG[ ") + ((hw700.pcg8000_mode == 1)?String("ON"):String("OFF"))  + String(" ] Done.");
+  webServer.send(200, "text/html", makePage(message));
+}
+
 String makePage(String message) {
 String s = "<!DOCTYPE html><meta charset=\"UTF-8\" /><meta name=\"viewport\" content=\"width=device-width\"><html><head>" 
 "<title>MZ-700 for M5Stack Setting</title>"
@@ -1403,6 +1437,16 @@ s += "</select>"
 "<form action='/soundSetting' method='post'>" 
 "<input type='hidden' name='enableSound' value='0'>"
 "<input type='submit' value='Sound OFF'>" 
+"</form></div>" 
+"<hr/>"
+"<div style='display:inline-flex'>"
+"<form action='/PCGSetting' method='post'>" 
+"<input type='hidden' name='enablePCG' value='1'>"
+"<input type='submit' value='PCG ON'>" 
+"</form> "
+"<form action='/PCGSetting' method='post'>" 
+"<input type='hidden' name='enablePCG' value='0'>"
+"<input type='submit' value='PCG OFF'>" 
 "</form></div>" ;
 
 //"<hr/>" 
@@ -1414,6 +1458,7 @@ s += "<hr/>";
 s += "ROM:" + String(mzConfig.romFile) + "<br/>";
 s += "TAPE:" + String(mzConfig.tapeFile) + "<br/>";
 s += "SOUND:" + (mzConfig.enableSound?String("ON"):String("OFF")) + "<br/>";
+s += "PCG:" + ((hw700.pcg8000_mode == 1)?String("ON"):String("OFF"))  + "<br/>";
 //s += "MZ MODE:" 
 //"CRT COLOR:" 
 //"Wi-Fi:" 

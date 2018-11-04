@@ -153,7 +153,7 @@ int font_load(const char *fontfile)
       if(dataFile.available()){
   			lineData = dataFile.read();
     		mz_font[dcode * 8 + line] = lineData;
-  	  	if(dcode < 128)
+  	  	if(dcode < 256)
   			{
   					pcg8000_font[dcode * 8 + line] = lineData;
   			}

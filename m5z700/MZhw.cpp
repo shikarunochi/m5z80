@@ -46,7 +46,7 @@ UINT8	*mem;													/* Main Memory */
 UINT8	*junk;													/* to give mmio somewhere to point at */
 
 UINT8 *mz_font;										// 256chars*8lines*8dots
-UINT8 *pcg8000_font;                /* PCG8000 font (2K) */
+UINT8 *pcg700_font;                /* PCG700 font (2K) */
 
 int rom1_mode;													/* ROM-1 判別用フラグ */
 int rom2_mode;													/* ROM-2 判別用フラグ */
@@ -398,7 +398,7 @@ void mz_reset(void)
         }
   //}
   
-	hw700.pcg8000_mode = 0;
+	hw700.pcg700_mode = 0;
 	hw700.tempo_strobe = 1;
 
 	hw700.retrace = 1;
@@ -1150,39 +1150,39 @@ void mmio_out(int addr,int val)
 		play8253();
 		break;
 
-		/* PCG8000 Control */
+		/* PCG-700 Control */
 		/* Data */
 	case 0xE010:
-		hw700.pcg8000_data = val;
+		hw700.pcg700_data = val;
 		break;
 
 		/* Addr-L */
 	case 0xE011:
-		hw700.pcg8000_addr &= 0xFF00;
-		hw700.pcg8000_addr |= val;
+		hw700.pcg700_addr &= 0xFF00;
+		hw700.pcg700_addr |= val;
 		break;
 
 		/* Addr-H / Control */
 	case 0xE012:
-		hw700.pcg8000_addr &= 0x00FF;
-		hw700.pcg8000_addr |= (val<<8);
+		hw700.pcg700_addr &= 0x00FF;
+		hw700.pcg700_addr |= (val<<8);
 		if ((val & (16+32))==(16+32))
 		{
 			/* ＣＧ→ＰＣＧコピー */
-      i = hw700.pcg8000_addr & 2047;
-			//i = (hw700.pcg8000_addr & 0x3FF) | 0x400;
+      i = hw700.pcg700_addr & 2047;
+			//i = (hw700.pcg700_addr & 0x3FF) | 0x400;
       if (i & 1024) i=2048+i;
       else i=1024+i;
       
-      pcg8000_font[hw700.pcg8000_addr & 2047]=mz_font[i];
+      pcg700_font[hw700.pcg700_addr & 2047]=mz_font[i];
 		}
 		else
 		if (val & 16)
 		{
-		  pcg8000_font[hw700.pcg8000_addr & 2047]=hw700.pcg8000_data;
+		  pcg700_font[hw700.pcg700_addr & 2047]=hw700.pcg700_data;
 		}
 		/* ＰＣＧ選択 */
-//		hw700.pcg8000_mode = val & 8;
+//		hw700.pcg700_mode = val & 8;
 		break;
 		
 		

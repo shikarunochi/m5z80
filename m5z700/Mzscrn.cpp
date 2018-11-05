@@ -153,9 +153,9 @@ int font_load(const char *fontfile)
       if(dataFile.available()){
   			lineData = dataFile.read();
     		mz_font[dcode * 8 + line] = lineData;
-  	  	if(dcode < 256)
-  			{
-  					pcg8000_font[dcode * 8 + line] = lineData;
+  	  	if(dcode >=128 && dcode < 256 ){ //通常フォント後半の場合PCG初期値として設定する
+            pcg700_font[(dcode & 0x7F) * 8 + line] = lineData;
+            pcg700_font[(dcode) * 8 + line] = lineData;
   			}
 		  }
 		}
@@ -206,8 +206,8 @@ void update_scrn(void)
 				}
 				else
 				{
-					//memcpy(fbptr + ptr, (hw700.pcg8000_mode == 0) ? mz_font[ch * 8 + cl] : pcg8000_font[ch * 8 + cl], sizeof(uint16_t) * 8);
-          lineData = (hw700.pcg8000_mode == 0) ? mz_font[ch * 8 + cl] : pcg8000_font[ch * 8 + cl];
+					//memcpy(fbptr + ptr, (hw700.pcg700_mode == 0) ? mz_font[ch * 8 + cl] : pcg700_font[ch * 8 + cl], sizeof(uint16_t) * 8);
+          lineData = (hw700.pcg700_mode == 0) ? mz_font[ch * 8 + cl] : pcg700_font[ch * 8 + cl];
           //for(int bit = 0;bit < 8;bit++){
           //   color = (lineData & 0x80) == 0 ? c_dark : c_bright;
           //   fb.drawPixel(cx * 8 + bit, screenY * 8 + cl,color);
@@ -255,12 +255,16 @@ void update_scrn(void)
         bgColor = c_dark;
       }
       
-      //fb.drawBitmap(cx * 8, cy * 8, (const uint8_t *)((hw700.pcg8000_mode == 0) ? mz_font[ch * 8] : pcg8000_font[ch * 8]), 8, 8, fgColor);
+      //fb.drawBitmap(cx * 8, cy * 8, (const uint8_t *)((hw700.pcg700_mode == 0) ? mz_font[ch * 8] : pcg700_font[ch * 8]), 8, 8, fgColor);
       fb.fillRect(cx * 8, cy * 8, 8, 8, bgColor);
-      if(hw700.pcg8000_mode == 0){
+      if(hw700.pcg700_mode == 0 || !(ch & 0x80)){
         fontPtr = &mz_font[(ch + fontOffset) * 8];
       }else{
-        fontPtr = &pcg8000_font[ch * 8];
+        if((chAttr & 0x80) != 0x80){
+          fontPtr = &pcg700_font[(ch & 0x7F) * 8];
+        }else{
+          fontPtr = &pcg700_font[(ch) * 8];
+        }
       }
       fb.drawBitmap(cx * 8, cy * 8, fontPtr, 8, 8, fgColor);
     }

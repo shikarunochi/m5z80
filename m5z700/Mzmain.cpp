@@ -221,9 +221,9 @@ mem = (UINT8*)ps_malloc((4+6+4+64)*1024);
 		result = -1;
 	}
 
-	/* PCG-8000 FONT */
-	pcg8000_font = (uint8_t*)ps_malloc(PCG8000_SIZE);
-	if(pcg8000_font == NULL)
+	/* PCG-700 FONT */
+	pcg700_font = (uint8_t*)ps_malloc(PCG700_SIZE);
+	if(pcg700_font == NULL)
 	{
 		result = -1;
 	}
@@ -236,9 +236,9 @@ mem = (UINT8*)ps_malloc((4+6+4+64)*1024);
 //------------------------------------------------
 void mz_free_mem(void)
 {
-	if(pcg8000_font)
+	if(pcg700_font)
 	{
-		free(pcg8000_font);
+		free(pcg700_font);
 	}
 
 	if(mz_font)
@@ -416,7 +416,7 @@ static int statusXfer(void)
 		{
 			sdata[pos - 1] = ',';
 		}
-		sprintf(&sdata[pos], "GM%1d", hw700.pcg8000_mode);
+		sprintf(&sdata[pos], "GM%1d", hw700.pcg700_mode);
 		pos += 4;
 		xferFlag &= ~SYST_PCG;
 	}
@@ -582,11 +582,11 @@ REPEAT:
 	case 'P':	// PCG
 		if(cmd[1] == '0')	// OFF
 		{
-			hw700.pcg8000_mode = 0;
+			hw700.pcg700_mode = 0;
 		}
 		else if(cmd[1] == '1')	// ON
 		{
-			hw700.pcg8000_mode = 1;
+			hw700.pcg700_mode = 1;
 		}
 		break;
 	case 'K':	// Key in
@@ -1383,11 +1383,11 @@ void soundSetting(){
 void PCGSetting(){
   String enablePCG = urlDecode(webServer.arg("enablePCG"));
   if(enablePCG.toInt()==1){
-        hw700.pcg8000_mode = 1;
+        hw700.pcg700_mode = 1;
   }else{
-      hw700.pcg8000_mode = 0;
+      hw700.pcg700_mode = 0;
   }
-  String message = String("Set PCG[ ") + ((hw700.pcg8000_mode == 1)?String("ON"):String("OFF"))  + String(" ] Done.");
+  String message = String("Set PCG[ ") + ((hw700.pcg700_mode == 1)?String("ON"):String("OFF"))  + String(" ] Done.");
   webServer.send(200, "text/html", makePage(message));
 }
 
@@ -1458,7 +1458,7 @@ s += "<hr/>";
 s += "ROM:" + String(mzConfig.romFile) + "<br/>";
 s += "TAPE:" + String(mzConfig.tapeFile) + "<br/>";
 s += "SOUND:" + (mzConfig.enableSound?String("ON"):String("OFF")) + "<br/>";
-s += "PCG:" + ((hw700.pcg8000_mode == 1)?String("ON"):String("OFF"))  + "<br/>";
+s += "PCG:" + ((hw700.pcg700_mode == 1)?String("ON"):String("OFF"))  + "<br/>";
 //s += "MZ MODE:" 
 //"CRT COLOR:" 
 //"Wi-Fi:" 

@@ -40,7 +40,7 @@ extern "C" {
 //	MZSBLK_mainram,
 //	MZSBLK_textvram,
 //	MZSBLK_colorvram,
-//	MZSBLK_pcg8000_font,
+//	MZSBLK_pcg700_font,
 //	MZSBLK_mz1r12,
 //
 //	MZSBLK_MZ700,

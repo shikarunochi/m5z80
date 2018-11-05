@@ -24,7 +24,7 @@ typedef unsigned       DWORD;
 
 
 #define ROMFONT_SIZE 4096    /* ROMFONT SIZE  */
-#define PCG8000_SIZE 2048		/* PCG-8000 SIZE  */
+#define PCG700_SIZE 2048		/* PCG-700 SIZE  */
 
 #define CPU_SPEED 3580000		/* 3.580 MHz */
 #define CPU_SPEED_BASE 3580000	/* 3.580 MHz */

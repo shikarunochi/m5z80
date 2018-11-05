@@ -29,10 +29,10 @@ typedef struct
 {
   TMEMBANK  memctrl[32];      /* Memory Bank Controller */
 	int		pb_select;					/* selected kport to read */
-	int		pcg8000_data;
-	int		pcg8000_addr;
+	int		pcg700_data;
+	int		pcg700_addr;
 	int		cursor_cou;
-	UINT16	pcg8000_mode;
+	UINT16	pcg700_mode;
 	UINT8	tempo_strobe;
   UINT8 motor;            /* bit0:カセットモーター bit2:データレコーダのスイッチセンス*/
 	UINT8	retrace;
@@ -161,8 +161,8 @@ extern T700_TS			ts700;
 extern T8253_DAT		_8253_dat;
 extern T8253_STAT		_8253_stat[3];
 
-extern int rom1_mode;													/* ROM-1 ���ʗp�t���O */
-extern int rom2_mode;													/* ROM-2 ���ʗp�t���O */
+extern int rom1_mode;													/* ROM-1 ・ｽ・ｽ・ｽﾊ用・ｽt・ｽ・ｽ・ｽO */
+extern int rom2_mode;													/* ROM-2 ・ｽ・ｽ・ｽﾊ用・ｽt・ｽ・ｽ・ｽO */
 
 /* memory */
 extern UINT8	*mem;													/* Main Memory */
@@ -171,7 +171,7 @@ extern UINT32 	*mzt_buf;
 
 /* FONT ROM/RAM */	
 extern UINT8 *mz_font;//[256][8][8];										// 256chars*8lines*8dots
-extern UINT8 *pcg8000_font;//[256][8][8];								/* PCG8000 font (2K) */
+extern UINT8 *pcg700_font;//[256][8][8];								/* PCG-700 font (2K) */
 
 // テスト用MZTデータ
 extern int mzt_size;

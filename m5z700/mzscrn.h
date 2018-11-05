@@ -24,7 +24,7 @@ int font_load(const char *);
 
 void update_scrn(void);
 //void mz_chr_put(int x,int y,int code,int color);
-//void mz_pcg8000_put(int x,int y,int code,int color);
+//void mz_pcg700_put(int x,int y,int code,int color);
 //void mz_bgcolor_put(int x,int y,int color);
 
 void updateStatusArea(const char* message);

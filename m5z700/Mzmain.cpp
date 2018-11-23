@@ -60,6 +60,19 @@ void *keyin_thread(void *arg);
 static pthread_t webserver_thread_id;
 void *webserver_thread(void *arg);
 
+void checkJoyPad();
+
+int buttonApin = 26; //赤ボタン
+int buttonBpin = 36; //青ボタン
+
+bool joyPadPushed_U;
+bool joyPadPushed_D;
+bool joyPadPushed_L;
+bool joyPadPushed_R;
+bool joyPadPushed_A;
+bool joyPadPushed_B;
+bool joyPadPushed_Press;
+
 #define	FIFO_i_PATH	"/tmp/cmdxfer"
 #define	FIFO_o_PATH	"/tmp/stsxfer"
 int fifo_i_fd, fifo_o_fd;
@@ -695,6 +708,16 @@ int mz80c_main()
   webCommandParam = "";
   webCommandBreakFlag = false;
 
+  pinMode(buttonApin, INPUT_PULLUP);
+  pinMode(buttonBpin, INPUT_PULLUP);
+  joyPadPushed_U = false;
+  joyPadPushed_D = false;
+  joyPadPushed_L = false;
+  joyPadPushed_R = false;
+  joyPadPushed_A = false;
+  joyPadPushed_B = false;
+  joyPadPushed_Press = false;
+
 	//readlink("/proc/self/exe", tmpPathStr, sizeof(tmpPathStr));
 	//sprintf(PROGRAM_PATH, "%s", dirname(tmpPathStr));
   
@@ -1033,8 +1056,9 @@ void * keyin_thread(void *arg)
             mz_keyup_sub(ak_tbl[inKeyCode]);
             delay(60);
        }
-        
+     
     }
+    checkJoyPad();
     delay(10);
   }
 	/*
@@ -1574,4 +1598,134 @@ void updateTapeList(){
     entry.close();
   }
   tapeRoot.close();
+}
+
+//--------------------------------------------------------------
+// JoyPadLogic
+//--------------------------------------------------------------
+
+void checkJoyPad(){
+  if(mzConfig.mzMode != MZMODE_700){
+    return;
+  }
+
+  int joyX,joyY,joyPress,buttonA,buttonB;
+  Wire.requestFrom(0x52,3);
+  
+  while(Wire.available()){
+    joyX = Wire.read();//X（ジョイパッド的には Y）
+    joyY = Wire.read();//Y（ジョイパッド的には X）
+    joyPress = Wire.read();//Press    
+  }
+  if(joyX == 0){
+    return; //接続されていない
+  }
+
+  if (digitalRead(buttonApin) == LOW)
+  {
+    buttonA = 1;
+  }else{
+    buttonA = 0;
+  }
+  if (digitalRead(buttonBpin) == LOW)
+  {
+    buttonB = 1;
+  }else{
+    buttonB = 0;
+  }
+
+  if(joyPadPushed_U == false && joyX < 80){
+    //カーソル上を押す
+    mz_keydown_sub(0x75);
+    joyPadPushed_U = true;
+    delay(60);
+  }else if(joyPadPushed_U == true && joyX > 80){
+    //カーソル上を戻す
+    mz_keyup_sub(0x75);
+    joyPadPushed_U = false;
+  }
+  if(joyPadPushed_D == false && joyX > 160){
+    //カーソル下を押す
+    mz_keydown_sub(0x74);
+    joyPadPushed_D  =true;
+    delay(60);
+  }else if(joyPadPushed_D == true && joyX < 160){
+    //カーソル下を戻す
+    mz_keyup_sub(0x74);
+    joyPadPushed_D = false;
+  }
+  if(joyPadPushed_L == false && joyY < 80){
+    //カーソル左を押す
+    mz_keydown_sub(0x72);
+    joyPadPushed_L = true;
+    delay(60);
+  }else if(joyPadPushed_L == true && joyY > 80){
+    //カーソル左を戻す
+    mz_keyup_sub(0x72);
+    joyPadPushed_L = false;
+  }
+  if(joyPadPushed_R == false && joyY > 160){
+    //カーソル右を押す
+    mz_keydown_sub(0x73);
+    joyPadPushed_R = true;
+    delay(60);
+  }else if(joyPadPushed_R == true && joyY < 160){
+    //カーソル右を戻す
+    mz_keyup_sub(0x73);
+    joyPadPushed_R = false;
+  }
+  if(joyPadPushed_A == false && buttonA == 1){
+    //CTRL & SPACE & 1 押下して戻す
+    mz_keydown_sub(0x64);
+    delay(60);
+    mz_keyup_sub(0x64);
+    delay(10);
+    mz_keydown_sub(0x86);
+    delay(60);
+    mz_keyup_sub(0x86);
+    delay(10);
+    mz_keydown_sub(0x57);
+    delay(60);
+    mz_keyup_sub(0x57);
+    //joyPadPushed_A = true;
+  }else if(joyPadPushed_R == true && buttonA == 0){
+    //スペースを戻す
+    //mz_keyup_sub(0x64);
+    //delay(10);
+    //mz_keyup_sub(0x86);
+    joyPadPushed_A = false;
+  }
+  if(joyPadPushed_B == false && buttonB == 1){
+    //SHIFT & 3 押下して戻す
+    mz_keydown_sub(0x80);
+    delay(60);
+    mz_keyup_sub(0x80);
+    delay(10);
+    mz_keydown_sub(0x55);
+    delay(60);
+    mz_keyup_sub(0x55);
+    //joyPadPushed_B = true;
+  }else if(joyPadPushed_B == true && buttonB == 0){
+    //SHIFTを戻す
+    //mz_keyup_sub(0x80);
+    //joyPadPushed_B = false;
+  }
+  if(joyPadPushed_Press == false && joyPress == 1){
+    //CR&S押下
+    mz_keydown_sub(0x00);
+    delay(60);
+    mz_keyup_sub(0x00);
+    delay(10);
+    mz_keydown_sub(0x25);
+    delay(60);
+    mz_keyup_sub(0x25);
+    joyPadPushed_Press = true;
+
+  }else if(joyPadPushed_Press == true && joyPress == 0){
+    //CRを戻す
+    mz_keyup_sub(0x00);
+    delay(10);
+    mz_keyup_sub(0x25);
+    joyPadPushed_Press = false;
+  }
 }

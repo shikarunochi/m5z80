@@ -38,7 +38,7 @@ void setup() {
   ledcAttachPin(SPEAKER_PIN, LEDC_CHANNEL_0);
   
   mz80c_main();   
-  saveConfig();
+
   exit(0);  
 
 }

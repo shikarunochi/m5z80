@@ -53,17 +53,24 @@ WiFiMulti wifiMulti;
     
 static bool intFlag = false;
 
-static pthread_t scrn_thread_id;
-void *scrn_thread(void *arg);
-static pthread_t keyin_thread_id;
-void *keyin_thread(void *arg);
-static pthread_t webserver_thread_id;
-void *webserver_thread(void *arg);
+//static pthread_t scrn_thread_id;
+void scrn_thread(void *arg);
+//static pthread_t keyin_thread_id;
+void keyin_thread(void *arg);
+//static pthread_t webserver_thread_id;
+void webserver_thread(void *arg);
+//static pthread_t i2cKeyboard_thread_id;
+//void i2cKeyboard_thread(void *arg);
 
 void checkJoyPad();
 
 int buttonApin = 26; //赤ボタン
 int buttonBpin = 36; //青ボタン
+
+#define CARDKB_ADDR 0x5F
+void checkI2cKeyboard();
+
+//static xQueueHandle keyboard_queue = NULL;
 
 bool joyPadPushed_U;
 bool joyPadPushed_D;
@@ -87,6 +94,16 @@ String romListOptionHTML;
 void updateRomList();
 
 String tapeListOptionHTML;
+
+#define MAX_FILES 255 // this affects memory
+String tapeList[MAX_FILES];
+int tapeListCount;
+void aSortTapeList();
+
+boolean btnBLongPressFlag;
+
+String selectMzt();
+
 void updateTapeList();
 
 int q_kbd;
@@ -470,6 +487,7 @@ static void processWebCommand(void)
     case WEB_C_SELECT_ROM:
     {
       strncpy(mzConfig.romFile, webCommandParam.c_str(), 50);
+      saveConfig();
       mz_exit(0);//モニタROM変更時はリセット
       //monrom_load();
       break;
@@ -717,6 +735,8 @@ int mz80c_main()
   joyPadPushed_A = false;
   joyPadPushed_B = false;
   joyPadPushed_Press = false;
+  
+  btnBLongPressFlag = false;
 
 	//readlink("/proc/self/exe", tmpPathStr, sizeof(tmpPathStr));
 	//sprintf(PROGRAM_PATH, "%s", dirname(tmpPathStr));
@@ -742,6 +762,11 @@ int mz80c_main()
 	// 終了
 	//mzbeep_clean();
   //end_defkey();
+	
+	saveConfig();
+  
+  delay(1000);
+ 
 	mz_free_mem();
 	mz_screen_finish();
 
@@ -792,6 +817,7 @@ void mainloop(void)
     ak_tbl = ak_tbl_700;
     ak_tbl_s = ak_tbl_s_700;
   }
+  //keyboard_queue = xQueueCreate(10, sizeof(uint8_t));
 
   delay(100);
   /* スレッド　開始 */
@@ -810,25 +836,30 @@ void mainloop(void)
     M5.update();
     if(M5.BtnA.wasPressed()){
       inputStringEx = "LOAD";
+      Serial.println("buttonA pressed!");
     }
 
-    if(M5.BtnB.wasPressed()){
-      if(ts700.mzt_settape != 0 && ts700.cmt_play == 0)
-      {
-        delay(100);
-        Serial.println("TAPE START");
-        delay(100);
-        ts700.cmt_play = 1;
-        ts700.mzt_start = ts700.cpu_tstates;
-        ts700.cmt_tstates = 1;
-        setup_cpuspeed(5);
-        sysst.motor = 1;
-        xferFlag |= SYST_MOTOR;
-       }else{
+    if(M5.BtnB.wasReleased()){
+      if(btnBLongPressFlag != true){
+        if(ts700.mzt_settape != 0 && ts700.cmt_play == 0)
+        {
           delay(100);
-          Serial.println("TAPE CAN'T START");
+          Serial.println("TAPE START");
           delay(100);
-       }
+          ts700.cmt_play = 1;
+          ts700.mzt_start = ts700.cpu_tstates;
+          ts700.cmt_tstates = 1;
+          setup_cpuspeed(5);
+          sysst.motor = 1;
+          xferFlag |= SYST_MOTOR;
+         }else{
+            delay(100);
+            Serial.println("TAPE CAN'T START");
+            delay(100);
+         }
+      }else{
+        btnBLongPressFlag = false;
+      }
     }
     if(M5.BtnC.wasPressed()){ 
       if(webStarted){
@@ -837,6 +868,17 @@ void mainloop(void)
         startWebServer();
       }
     }
+    if(M5.BtnB.pressedFor(2000)){
+      if(btnBLongPressFlag != true){
+        btnBLongPressFlag = true;
+        //B長押しで、テープ選択画面
+        //選択時は画面描画止める
+        suspendScrnThreadFlag = true;
+        selectMzt();
+        delay(100);
+        suspendScrnThreadFlag = false;
+      }
+    }   
     syncTmp = millis();
     if(synctime - (syncTmp - timeTmp) > 0){
       delay(synctime - (syncTmp - timeTmp));
@@ -885,7 +927,7 @@ int create_thread(void)
 //--------------------------------------------------------------
 void start_thread(void)
 {
-	int st;
+/*	int st;
 
 	st = pthread_create(&scrn_thread_id, NULL, scrn_thread, NULL);
 	if(st != 0)
@@ -912,6 +954,49 @@ void start_thread(void)
   }
   pthread_detach(webserver_thread_id);
 
+  st = pthread_create(&i2cKeyboard_thread_id, NULL, i2cKeyboard_thread, NULL);
+  
+  if(st != 0) {
+    perror("i2cKeyboard_thread");
+    return;
+  }
+  pthread_detach(i2cKeyboard_thread_id);
+*/
+    xTaskCreatePinnedToCore(
+                    scrn_thread,     /* Function to implement the task */
+                    "scrn_thread",   /* Name of the task */
+                    4096,      /* Stack size in words */
+                    NULL,      /* Task input parameter */
+                    1,         /* Priority of the task */
+                    NULL,      /* Task handle. */
+                    1);        /* Core where the task should run */
+    
+    xTaskCreatePinnedToCore(
+                    keyin_thread,     /* Function to implement the task */
+                    "keyin_thread",   /* Name of the task */
+                    4096,      /* Stack size in words */
+                    NULL,      /* Task input parameter */
+                    1,         /* Priority of the task */
+                    NULL,      /* Task handle. */
+                    0);        /* Core where the task should run */        
+   
+    xTaskCreatePinnedToCore(
+                    webserver_thread,     /* Function to implement the task */
+                    "webserver_thread",   /* Name of the task */
+                    4096,      /* Stack size in words */
+                    NULL,      /* Task input parameter */
+                    1,         /* Priority of the task */
+                    NULL,      /* Task handle. */
+                    0);        /* Core where the task should run */
+
+//    xTaskCreatePinnedToCore(
+//                    i2cKeyboard_thread,     /* Function to implement the task */
+//                    "i2cKeyboard_thread",   /* Name of the task */
+//                    4096,      /* Stack size in words */
+//                    NULL,      /* Task input parameter */
+//                    1,         /* Priority of the task */
+//                    NULL,      /* Task handle. */
+//                    0);        /* Core where the task should run */                              
 }
 
 //--------------------------------------------------------------
@@ -930,7 +1015,7 @@ void suspendScrnThread(bool flag){
 //--------------------------------------------------------------
 // 画面描画スレッド 
 //--------------------------------------------------------------
-void * scrn_thread(void *arg)
+void scrn_thread(void *arg)
 {
   //long synctime = 17;// 60fps
   long synctime = 50;// 20fps
@@ -957,13 +1042,13 @@ void * scrn_thread(void *arg)
        delay(synctime);
     }
 	}
-	return NULL;
+	return;// NULL;
 }
 
 //--------------------------------------------------------------
 // キーボード入力スレッド
 //--------------------------------------------------------------
-void * keyin_thread(void *arg)
+void keyin_thread(void *arg)
 {
   char inKeyCode = 0;
  
@@ -987,7 +1072,7 @@ void * keyin_thread(void *arg)
     
     if (Serial.available() > 0) {
       serialKeyCode = Serial.read();
-      
+      Serial.println(serialKeyCode);
       //Special Key
       if( serialKeyCode == 27 ){ //ESC
         serialKeyCode = Serial.read();
@@ -1058,6 +1143,8 @@ void * keyin_thread(void *arg)
        }
      
     }
+
+    checkI2cKeyboard();
     checkJoyPad();
     delay(10);
   }
@@ -1146,13 +1233,13 @@ void * keyin_thread(void *arg)
 	ioctl(fd2, EVIOCGRAB, 0);
 	close(fd2);
 */
-	return NULL;
+	return;// NULL;
 }
 
 //--------------------------------------------------------------
 // Web処理スレッド 
 //--------------------------------------------------------------
-void * webserver_thread(void *arg)
+void webserver_thread(void *arg)
 { 
   long synctime = 500;
   long timeTmp;
@@ -1173,7 +1260,7 @@ void * webserver_thread(void *arg)
       delay(1);
     }
   }
-  return NULL;
+  return;// NULL;
 }
 
 void suspendWebThread(bool flag){
@@ -1350,6 +1437,7 @@ void doSendCommand(String inputString){
         delay(200);
       }
     }
+    delay(200);
   }
   delay(10);
   //最後に改行コード
@@ -1579,6 +1667,8 @@ void updateTapeList(){
   tapeRoot = SD.open(TAPE_DIRECTORY);
 
   tapeListOptionHTML = "";
+  tapeListCount = 0;
+  
   while(1){
     File entry =  tapeRoot.openNextFile();
     if(!entry){// no more files
@@ -1588,16 +1678,22 @@ void updateTapeList(){
     if (!entry.isDirectory()) {
         String fileName = entry.name();
         String tapeName = fileName.substring(fileName.lastIndexOf("/") + 1);
-        
-        tapeListOptionHTML += "<option value=\"";
-        tapeListOptionHTML += tapeName;
-        tapeListOptionHTML += "\">";
-        tapeListOptionHTML += tapeName;
-        tapeListOptionHTML += "</option>";
+        tapeList[tapeListCount] = tapeName;
+        tapeListCount++;
     }
     entry.close();
   }
   tapeRoot.close();
+  
+  aSortTapeList();
+
+  for(int index = 0;index < tapeListCount;index++){
+    tapeListOptionHTML += "<option value=\"";
+    tapeListOptionHTML += tapeList[index];
+    tapeListOptionHTML += "\">";
+    tapeListOptionHTML += tapeList[index];
+    tapeListOptionHTML += "</option>";
+  }
 }
 
 //--------------------------------------------------------------
@@ -1608,19 +1704,21 @@ void checkJoyPad(){
   if(mzConfig.mzMode != MZMODE_700){
     return;
   }
-
-  int joyX,joyY,joyPress,buttonA,buttonB;
-  Wire.requestFrom(0x52,3);
   
-  while(Wire.available()){
-    joyX = Wire.read();//X（ジョイパッド的には Y）
-    joyY = Wire.read();//Y（ジョイパッド的には X）
-    joyPress = Wire.read();//Press    
+  int joyX,joyY,joyPress,buttonA,buttonB;
+  joyX = 0;
+
+  if(Wire.requestFrom(0x52,3) >= 3){
+      if(Wire.available()){joyX = Wire.read();}//X（ジョイパッド的には Y）
+      if(Wire.available()){joyY = Wire.read();}//Y（ジョイパッド的には X）
+      if(Wire.available()){joyPress = Wire.read();}//Press
   }
+  
+
   if(joyX == 0){
     return; //接続されていない
   }
-
+  
   if (digitalRead(buttonApin) == LOW)
   {
     buttonA = 1;
@@ -1633,7 +1731,7 @@ void checkJoyPad(){
   }else{
     buttonB = 0;
   }
-
+  
   if(joyPadPushed_U == false && joyX < 80){
     //カーソル上を押す
     mz_keydown_sub(0x75);
@@ -1728,4 +1826,223 @@ void checkJoyPad(){
     mz_keyup_sub(0x25);
     joyPadPushed_Press = false;
   }
+}
+//--------------------------------------------------------------
+// I2C Keyboard Logic
+//--------------------------------------------------------------
+void checkI2cKeyboard(){
+uint8_t i2cKeyCode = 0;  
+  if(Wire.requestFrom(CARDKB_ADDR, 1)){  // request 1 byte from keyboard
+    while (Wire.available()) {
+      i2cKeyCode = Wire.read();                  // receive a byte as 
+      break;
+    }
+  }
+  if(i2cKeyCode == 0){
+    return;
+  }
+  //特殊キー
+  switch(i2cKeyCode){
+    case 0xB5:
+      i2cKeyCode = 0x12;  //UP
+      break;
+    case 0xB6:
+      i2cKeyCode = 0x11;  //DOWN
+      break;
+    case 0xB7:
+      i2cKeyCode = 0x13;  //RIGHT
+      break;
+    case 0xB4:
+      i2cKeyCode = 0x14;  //LEFT
+      break;
+    case 0x99: //Fn + UP
+      i2cKeyCode = 0x15;  //HOME
+      break;
+    case 0xA4: //Fn + Down
+      i2cKeyCode = 0x16;  //END -> CLR
+      break;
+    case 0xA5:  //Fn + Right
+      i2cKeyCode = 0x18;  //INST
+      break;
+    case 0x08: //BS
+      i2cKeyCode = 0x17;
+      break;
+    case 0x1B: //ESC
+      webCommandBreakFlag = true; //うまくキーコード処理できなかったのでWebからのBreak送信扱いにします。
+      return;              
+    default:
+      break;
+     }
+
+      if(ak_tbl[i2cKeyCode] == 0xff)
+      {
+        //何もしない
+      }
+      else if(ak_tbl[i2cKeyCode] == 0x80)
+      {
+        mz_keydown_sub(ak_tbl[i2cKeyCode]);
+        delay(60);
+        mz_keydown_sub(ak_tbl_s[i2cKeyCode]);
+        delay(60);
+        mz_keyup_sub(ak_tbl_s[i2cKeyCode]);
+        mz_keyup_sub(ak_tbl[i2cKeyCode]);
+      delay(60);
+      }
+      else
+      {
+      mz_keydown_sub(ak_tbl[i2cKeyCode]);
+      delay(60);
+      mz_keyup_sub(ak_tbl[i2cKeyCode]);
+      delay(60);
+    } 
+  
+}
+
+
+String selectMzt(){
+  delay(10);
+  M5.Lcd.fillScreen(TFT_BLACK);
+  delay(10);
+  M5.Lcd.setTextSize(2);
+  String curTapeFile  = String(mzConfig.tapeFile);
+  int selectIndex = 0;
+  for(int index = 0;index < tapeListCount;index++){
+    if(tapeList[index].compareTo(curTapeFile)==0){
+      selectIndex = index;
+      break;
+    }
+  }
+  
+  int startIndex = 0;
+  int endIndex = startIndex + 10;
+  if(endIndex > tapeListCount){
+    endIndex = tapeListCount;
+  }
+  Serial.print("start:");
+  Serial.println(startIndex);
+  Serial.println("end:");
+  Serial.println(endIndex);
+  boolean needRedraw = true;
+  while(true){
+
+    if(needRedraw == true){
+      M5.Lcd.fillScreen(0);
+      M5.Lcd.setCursor(0,0);
+      startIndex = selectIndex - 5;
+      if(startIndex < 0){
+        startIndex = 0;
+      }
+
+      endIndex = startIndex + 13;
+      if(endIndex > tapeListCount -1){
+        endIndex = tapeListCount -1;
+      }
+
+      for(int index = startIndex;index < endIndex;index++){
+          if(index == selectIndex){
+             M5.Lcd.setTextColor(TFT_GREEN);
+          }else{
+            M5.Lcd.setTextColor(TFT_WHITE);
+          }
+          M5.Lcd.println(tapeList[index]);
+      }
+      M5.Lcd.setTextColor(TFT_WHITE);
+
+      M5.Lcd.drawRect(0, 240 - 19, 100 , 18, TFT_WHITE);
+      M5.Lcd.setCursor(35, 240 - 17);
+      M5.Lcd.print("U P");
+      M5.Lcd.drawRect(110, 240 - 19, 100 , 18, TFT_WHITE);
+      M5.Lcd.setCursor(125, 240 - 17);
+      M5.Lcd.print("SELECT");
+      M5.Lcd.drawRect(220, 240 - 19, 100 , 18, TFT_WHITE);
+      M5.Lcd.setCursor(245, 240 - 17);
+      M5.Lcd.print("DOWN");
+      needRedraw = false;
+    }
+    M5.update();
+    if(M5.BtnA.wasPressed()){
+      selectIndex--;
+      if(selectIndex < 0){
+        selectIndex = 0;
+      }
+      needRedraw = true;
+    }
+
+    if(M5.BtnC.wasPressed()){
+      selectIndex++;
+      if(selectIndex > tapeListCount - 1){
+        selectIndex = tapeListCount -1;
+      }
+      needRedraw = true;
+    }
+    
+    if(M5.BtnB.wasPressed()){
+      Serial.print("select:");
+      Serial.println(tapeList[selectIndex]);
+      delay(10);
+      M5.Lcd.fillScreen(TFT_BLACK);
+
+      strncpy(mzConfig.tapeFile, tapeList[selectIndex].c_str(), 50);
+      set_mztData(mzConfig.tapeFile);
+      saveConfig();
+      Serial.println("saveDone");
+      ts700.cmt_play = 0;
+         
+      M5.Lcd.setCursor(0,0);
+      M5.Lcd.print("Set:");
+      M5.Lcd.print(tapeList[selectIndex]);
+      delay(2000);
+      M5.Lcd.fillScreen(TFT_BLACK);
+      delay(10);
+      return tapeList[selectIndex];
+    }    
+    delay(100);
+  }
+}
+
+
+/*
+void i2cKeyboard_thread(void *arg){
+  while(!intByUser())
+  {
+    if(Wire.requestFrom(CARDKB_ADDR, 1)){  // request 1 byte from keyboard
+      while (Wire.available()) {
+        char i2cKeyCode = Wire.read();                  // receive a byte as 
+        if(i2cKeyCode != 0) {
+          xQueueSendFromISR(keyboard_queue, &i2cKeyCode, NULL);
+          //Serial.println(i2cKeyCode, HEX);
+        }
+        break;
+      }
+    }
+    checkJoyPad();
+    delay(5);
+    
+  }
+}
+*/
+
+
+/* bubble sort filenames */
+//https://github.com/tobozo/M5Stack-SD-Updater/blob/master/examples/M5Stack-SD-Menu/M5Stack-SD-Menu.ino
+void aSortTapeList() {
+  
+  bool swapped;
+  String temp;
+  String name1, name2;
+  do {
+    swapped = false;
+    for(uint16_t i=0; i<tapeListCount-1; i++ ) {
+      name1 = tapeList[i];
+      name1.toUpperCase();
+      name2 = tapeList[i+1];
+      name2.toUpperCase();
+      if (name1.compareTo(name2) > 0) {
+        temp = tapeList[i];
+        tapeList[i] = tapeList[i+1];
+        tapeList[i+1] = temp;
+        swapped = true;
+      }
+    }
+  } while (swapped);
 }

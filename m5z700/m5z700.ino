@@ -14,6 +14,8 @@
 #include <M5Stack.h>  
 #include "m5z700.h"
 #include "mzmain.h"
+#include <M5StackUpdater.h>     // https://github.com/tobozo/M5Stack-SD-Updater/
+#include <Preferences.h>
 
 int xorKey = 0x80;
 
@@ -22,6 +24,11 @@ void setup() {
   Serial.println("MAIN_START");
 
   Wire.begin();
+  if(digitalRead(BUTTON_A_PIN) == 0) {
+     Serial.println("Will Load menu binary");
+     updateFromFS(SD);
+     ESP.restart();
+  }
   //Cを押下しながら起動された場合は、強制的にアクセスポイントモードにする
   if(digitalRead(BUTTON_C_PIN) == 0) {
     mzConfig.forceAccessPoint = true;
@@ -130,6 +137,19 @@ void loadConfig(){
   }else{
     Serial.println("ConfigFile not found.");
   }
+  //preferences に Wi-Fi Configがあれば、そちらで上書きする。
+  Preferences preferences;
+  preferences.begin("wifi-config");
+  String wifi_ssid = preferences.getString("WIFI_SSID");
+  if(wifi_ssid.length() > 0){
+    strncpy(mzConfig.ssid, wifi_ssid.c_str(),sizeof(mzConfig.ssid));
+  }
+  String wifi_password = preferences.getString("WIFI_PASSWD");
+  if(wifi_password.length() > 0){
+    strncpy(mzConfig.pass, wifi_password.c_str(),sizeof(mzConfig.pass));
+  }
+  preferences.end();
+
 }
 
 void xorEnc(char fromData[], char toData[] ){

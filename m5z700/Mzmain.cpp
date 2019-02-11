@@ -78,6 +78,7 @@ bool joyPadPushed_R;
 bool joyPadPushed_A;
 bool joyPadPushed_B;
 bool joyPadPushed_Press;
+bool enableJoyPadButton;
 
 #define	FIFO_i_PATH	"/tmp/cmdxfer"
 #define	FIFO_o_PATH	"/tmp/stsxfer"
@@ -742,7 +743,8 @@ int mz80c_main()
   joyPadPushed_A = false;
   joyPadPushed_B = false;
   joyPadPushed_Press = false;
-  
+  enableJoyPadButton = false;
+
   btnBLongPressFlag = false;
 
 	//readlink("/proc/self/exe", tmpPathStr, sizeof(tmpPathStr));
@@ -1746,6 +1748,16 @@ void checkJoyPad(){
     buttonB = 0;
   }
   
+  if(enableJoyPadButton == false){
+    if(buttonA == 1){ //ボタン接続されていなければボタンAが0、Bが1のままなので、1度Aが1になれば、以降はボタン接続アリとする。
+      enableJoyPadButton = true;
+    }else{
+      //接続されていない場合は押されてない扱いとする。
+      buttonA = 0;
+      buttonB = 0;
+    }
+  }
+
   if(joyPadPushed_U == false && joyX < 80){
     //カーソル上を押す
     mz_keydown_sub(0x75);

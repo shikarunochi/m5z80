@@ -121,9 +121,6 @@ typedef struct
 {
   char romFile[50 + 1];
   char tapeFile[50 + 1];
-  char ssid[50 + 1];
-  char pass[50 + 1];
-  bool forceAccessPoint;
   bool enableSound;
   int mzMode;
 } MZ_CONFIG;
@@ -132,9 +129,6 @@ enum{
   MZMODE_80 = 0,
   MZMODE_700
 };
-
-void loadConfig();
-void saveConfig();
 
 extern MZ_CONFIG mzConfig;
 

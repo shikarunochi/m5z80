@@ -41,8 +41,6 @@ uint16_t c_bright;
 
 //フレームバッファ
 TFT_eSprite fb = TFT_eSprite(&M5.Lcd);
-TFT_eSprite statusArea = TFT_eSprite(&M5.Lcd);
-TFT_eSprite statusSubArea = TFT_eSprite(&M5.Lcd);
 
 int fontOffset = 0;
 int fgColor = 0;
@@ -51,70 +49,18 @@ int fgColorIndex = 0;
 int bgColorIndex = 0;
 int MZ700_COLOR[] = {BLACK,BLUE,RED,MAGENTA,GREEN,CYAN,YELLOW,WHITE};
 
+String statusAreaMessage;
 /*
  * 表示画面の初期化
  */
 int mz_screen_init(void)
 {
   fb.setColorDepth(8);
-  fb.createSprite(320, 200);
+  fb.createSprite(320, 240);
   fb.fillSprite(TFT_BLACK);
   fb.pushSprite(0, 0);
 
-  statusArea.setColorDepth(8);
-  statusArea.createSprite(260,12);
-  statusArea.fillSprite(TFT_BLACK);
-
-  statusSubArea.setColorDepth(8);
-  statusSubArea.createSprite(60,12);
-  statusSubArea.fillSprite(TFT_BLACK);
-
-//	FILE *fd;
-//	struct fb_var_screeninfo vinfo;
-//	struct fb_fix_screeninfo finfo;
-
-//	// フレームバッファのオープン
-//	fd_fb = open(FB_NAME, O_RDWR);
-//	if (!fd_fb)
-//	{
-//		perror("Open Framebuffer device");
-//		return -1;
-//	}
-
-//	// スクリーン情報取得
-//	if (ioctl(fd_fb, FBIOGET_FSCREENINFO, &finfo))
-//	{
-//		perror("FB fixed info");
-//		return -1;
-//	}
-//	if (ioctl(fd_fb, FBIOGET_VSCREENINFO, &vinfo))
-//	{
-//		perror("FB variable info");
-//		return -1;
-//	}
-//
-//	bpp = vinfo.bits_per_pixel;
-//	pitch = finfo.line_length;
-//	printf("X = %d, Y = %d, %d(bpp)\n", vinfo.xres, vinfo.yres, bpp);
-//	ssize = vinfo.xres * vinfo.yres * bpp / 8;
-
-//	// メモリへマッピング
-//	fbptr = (char *)mmap(0, ssize, PROT_READ|PROT_WRITE, MAP_SHARED, fd_fb, 0);
-//	if ((int)fbptr == -1)
-//	{
-//		perror("Mapping FB");
-//		return -1;
-//	}
-
-//	// 画面クリア
-//	for(int ptr = 0; ptr < ssize; ptr++)
-//	{
-//		*(fbptr + ptr) = 0;
-//	}
-
-//	// カーソル点滅抑止
-//	system("setterm -cursor off > /dev/tty0");
-//
+  statusAreaMessage = "";
 	return 0;
 }
 
@@ -123,8 +69,6 @@ int mz_screen_init(void)
  */
 void mz_screen_finish(void)
 {
-	//munmap(fbptr, ssize);
-	//close(fd_fb);
 }
 
 /*
@@ -270,6 +214,12 @@ void update_scrn(void)
     }
   }
   fb.pushSprite(0, 0);    
+  fb.setTextColor(TFT_WHITE);
+  fb.setTextSize(2);
+  fb.fillRect(0,200,260,40,TFT_BLACK);
+  fb.setCursor(0,210);
+  //M5.Lcd.drawString(message,0,228);
+  fb.print(statusAreaMessage);
        
 //			clock_gettime(CLOCK_MONOTONIC_RAW, &h_split);
 //			do
@@ -296,16 +246,6 @@ void update_scrn(void)
 }
 
 void updateStatusArea(const char* message){
-  statusArea.fillSprite(TFT_BLACK);
-  statusArea.setCursor(0,0);
-  statusArea.print(message);
-  statusArea.pushSprite(0, 228);
+  statusAreaMessage = String(message);
 }
 
-void updateStatusSubArea(const char* message, int color = WHITE){
-  statusSubArea.fillSprite(TFT_BLACK);
-  statusSubArea.setTextColor(color);
-  statusSubArea.setCursor(0,0);
-  statusSubArea.print(message);
-  statusSubArea.pushSprite(260, 228);
-}

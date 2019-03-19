@@ -702,6 +702,7 @@ int cmt_read(void)
 	if(tword >= ts700.mzt_bsize)
 	{
 		//Serial.println();
+		updateStatusArea("");
 		ts700.cmt_play = 0;
 		ts700.cmt_tstates = 0;
 		sysst.tape =100;
@@ -714,6 +715,8 @@ int cmt_read(void)
 	{
 		//Serial.printf("old=%d new=%d\n", sysst.tape, percent);
     //Serial.println();
+		String message = "TAPE READ:" + String(percent) + " %";
+    updateStatusArea(message.c_str());
 		sysst.tape = percent;
 		xferFlag |= SYST_CMT;
 	}
@@ -947,10 +950,12 @@ void mmio_out(int addr,int val)
 				setup_cpuspeed(1);
 				ts700.mzt_elapse += (ts700.cpu_tstates - ts700.mzt_start);
 				sysst.motor = 0;
+				updateStatusArea("");
 				xferFlag |= SYST_MOTOR;
 			}
 		}
 		hw700.motor = val & 0x08;
+		if(hw700.motor == 0){updateStatusArea("");}
 #if _DEBUG
 //		dprintf("write beep_mask=%d int_mask=%d\n",_8253_dat.beep_mask,_8253_dat.int_mask);
 #endif
@@ -1009,6 +1014,7 @@ void mmio_out(int addr,int val)
 						setup_cpuspeed(1);
 						ts700.mzt_elapse += (ts700.cpu_tstates - ts700.mzt_start);
 						sysst.motor = 0;
+						updateStatusArea("");
 						xferFlag |= SYST_MOTOR;
 					}
 				}

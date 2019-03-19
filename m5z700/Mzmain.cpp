@@ -49,18 +49,12 @@ extern "C" {
 #include <WebServer.h>
 #include <WiFiMulti.h>
 
-WiFiMulti wifiMulti;
-    
 static bool intFlag = false;
 
-//static pthread_t scrn_thread_id;
 void scrn_thread(void *arg);
-//static pthread_t keyin_thread_id;
 void keyin_thread(void *arg);
-//static pthread_t webserver_thread_id;
-void webserver_thread(void *arg);
-//static pthread_t i2cKeyboard_thread_id;
-//void i2cKeyboard_thread(void *arg);
+
+void systemMenu();
 
 void checkJoyPad();
 
@@ -69,7 +63,8 @@ int buttonBpin = 36; //青ボタン
 
 #define CARDKB_ADDR 0x5F
 void checkI2cKeyboard();
-//static xQueueHandle keyboard_queue = NULL;
+
+void sortList(String fileList[], int fileListCount);
 
 bool joyPadPushed_U;
 bool joyPadPushed_D;
@@ -80,31 +75,14 @@ bool joyPadPushed_B;
 bool joyPadPushed_Press;
 bool enableJoyPadButton;
 
-#define	FIFO_i_PATH	"/tmp/cmdxfer"
-#define	FIFO_o_PATH	"/tmp/stsxfer"
-int fifo_i_fd, fifo_o_fd;
-
 SYS_STATUS sysst;
 int xferFlag = 0;
-int wFifoOpenFlag = 0;
 
 #define SyncTime	17									/* 1/60 sec.(milsecond) */
 
-String romListOptionHTML;
-void updateRomList();
-
-String tapeListOptionHTML;
-
 #define MAX_FILES 255 // this affects memory
-String tapeList[MAX_FILES];
-int tapeListCount;
-void aSortTapeList();
-
-boolean btnBLongPressFlag;
 
 String selectMzt();
-
-void updateTapeList();
 
 int q_kbd;
 typedef struct KBDMSG_t {
@@ -182,15 +160,6 @@ extern uint16_t c_bright;
 
 char serialKeyCode;
 
-WebServer webServer(80);
-
-bool webStarted;
-
-bool startWebServer();
-bool stopWebServer();
-String makePage(String message);
-String urlDecode(String input);
-
 void selectTape();
 void selectRom();
 void sendCommand();
@@ -202,22 +171,11 @@ void PCGSetting();
 void doSendCommand(String inputString);
 int set_mztype(void);
 
-enum{
-  WEB_C_NONE = 0,
-  WEB_C_SELECT_ROM,
-  WEB_C_SELECT_TAPE,
-  WEB_C_SEND_COMMAND,
-  WEB_C_SEND_BREAK_COMMAND
-};
-
-int webCommand;
-String webCommandParam;
-boolean webCommandBreakFlag;
+boolean sendBreakFlag;
 
 String inputStringEx;
 
 bool suspendScrnThreadFlag;
-bool suspendWebThreadFlag;
 
 MZ_CONFIG mzConfig;
 
@@ -313,6 +271,12 @@ void monrom_load(void)
   }
   String romPath = String(ROM_DIRECTORY) + "/" + romFile;
   Serial.println("ROM PATH:" + romPath);
+
+  if(SD.exists(romPath)==false){
+    M5.Lcd.println("ROM FILE NOT EXIST");
+    M5.Lcd.printf("[%s]", romPath);
+  }
+
   File dataFile = SD.open(romPath, FILE_READ);
 
   int offset = 0;
@@ -320,11 +284,6 @@ void monrom_load(void)
     while (dataFile.available()) {
       *(mem + offset) = dataFile.read();
       offset++;
-      if(offset % 1000 == 0){
-        delay(10);
-        Serial.print(".");
-        delay(10);
-      }
     }
     dataFile.close();
     M5.Lcd.print("ROM FILE:");
@@ -359,17 +318,6 @@ int set_mztype(void){
   return MZMODE_80;
 }
 
-void fdrom_load(void)
-{
-	FILE *in;
-
-	if((in = fopen(FDROM_PATH, "r")) != NULL)
-	{
-		fread(mem + ROM2_START, sizeof(unsigned char), 1024, in);
-		fclose(in);
-	}
-}
-
 //--------------------------------------------------------------
 // ＭＺのモニタＲＯＭのセットアップ
 //--------------------------------------------------------------
@@ -380,305 +328,6 @@ void mz_mon_setup(void)
   memset(mem+VID_START, 0, 4*1024);
   memset(mem+RAM_START, 0, 64*1024);
 
-}
-
-//--------------------------------------------------------------
-// FIFOの準備
-//--------------------------------------------------------------
-static int setupXfer(void)
-{
-  /*
-	// 外部プログラムから入力
-	mkfifo(FIFO_i_PATH, 0777);
-	fifo_i_fd = open(FIFO_i_PATH, O_RDONLY|O_NONBLOCK);
-	if(fifo_i_fd == -1)
-	{
-		perror("FIFO(i) open");
-		return -1;
-	}
-
-	// 外部プログラムへ出力
-	mkfifo(FIFO_o_PATH, 0777);
-*/
-	return 0;
-}
-
-//--------------------------------------------------------------
-// 外部プログラムへのステータス送信処理
-//--------------------------------------------------------------
-static int statusXfer(void)
-{
-  /*
-	char sdata[160];
-	int pos = 0;
-
-	if(xferFlag & SYST_CMT)
-	{
-		sprintf(&sdata[pos], "CP%3d", sysst.tape);
-		pos = 6;
-		xferFlag &= ~SYST_CMT;
-	}
-	if(xferFlag & SYST_MOTOR)
-	{
-		if(pos != 0)
-		{
-			sdata[pos - 1] = ',';
-		}
-		sprintf(&sdata[pos], "CM%1d", sysst.motor);
-		pos += 4;
-		xferFlag &= ~SYST_MOTOR;
-	}
-	if(xferFlag & SYST_LED)
-	{
-		if(pos != 0)
-		{
-			sdata[pos - 1] = ',';
-		}
-		sprintf(&sdata[pos], "LM%1d", sysst.led);
-		pos += 4;
-		xferFlag &= ~SYST_LED;
-	}
-	if(xferFlag & SYST_BOOTUP)
-	{
-		if(pos != 0)
-		{
-			sdata[pos - 1] = ',';
-		}
-		sprintf(&sdata[pos], "BU");
-		pos += 3;
-		xferFlag &= ~SYST_BOOTUP;
-	}
-	if(xferFlag & SYST_PCG)
-	{
-		if(pos != 0)
-		{
-			sdata[pos - 1] = ',';
-		}
-		sprintf(&sdata[pos], "GM%1d", hw700.pcg700_mode);
-		pos += 4;
-		xferFlag &= ~SYST_PCG;
-	}
-
-	if(pos != 0)
-	{
-		// 初回送信時にオープン
-		if(wFifoOpenFlag == 0)
-		{
-			fifo_o_fd = open(FIFO_o_PATH, O_WRONLY);
-			if(fifo_o_fd == -1)
-			{
-				perror("FIFO(o) open");
-				return -1;
-			}
-			wFifoOpenFlag = 1;
-		}
-
-		write(fifo_o_fd, sdata, pos);
-
-		// クローズしない
-		//close(fifo_o_fd);
-	}
- */
-	return 0;
-}
-
-//--------------------------------------------------------------
-// Webからのコマンド処理
-//--------------------------------------------------------------
-static void processWebCommand(void)
-{
-  if(webCommand == WEB_C_NONE){
-    return;
-  }
-  
-  switch(webCommand){
-    case WEB_C_SELECT_ROM:
-    {
-      strncpy(mzConfig.romFile, webCommandParam.c_str(), 50);
-      saveConfig();
-      mz_exit(0);//モニタROM変更時はリセット
-      //monrom_load();
-      break;
-    }
-    case WEB_C_SELECT_TAPE:
-    {
-      strncpy(mzConfig.tapeFile, webCommandParam.c_str(), 50);
-      if(ts700.cmt_tstates == 0)
-      {
-        suspendScrnThreadFlag = true;
-        delay(100);
-        String message = "Setting...";
-        updateStatusSubArea(message.c_str(), GREEN);
-        if(true == set_mztData(webCommandParam)){
-          saveConfig();
-          Serial.println("saveDone");
-          ts700.cmt_play = 0;
-          webServer.send(200, "text/html", makePage("Set TAPE[" + webCommandParam + "] "));
-        }else{
-          webServer.send(200, "text/html", makePage("FAIL:Set TAPE[" + webCommandParam + "] "));
-        }
-        updateStatusSubArea("",WHITE);
-        
-        suspendScrnThreadFlag = false;
-    } 
-      break;
-    }
-    case WEB_C_SEND_COMMAND:
-    {
-      inputStringEx = webCommandParam;
-      break;
-    }
-    case WEB_C_SEND_BREAK_COMMAND:{
-      webCommandBreakFlag = true;
-      break;
-    }
-  }
-
-  webCommand = WEB_C_NONE;
-  webCommandParam = "";
-  
-  /*
-	int num;
-	unsigned char ch, cmd[80];
-	KBDMSG kbdm;
-	static int runmode = 0;
-	char str[MAX_PATH];
-
-REPEAT:
-	// 予約されたステータス送信処理
-	statusXfer();
-
-	// 1行受信
-	ch = 0x01;
-	num = 1;
-	memset(cmd, 0, 80);
-	if(read(fifo_i_fd, &cmd[0], 1) <= 0)	// 受信データチェック
-	{
-		goto EXIT;
-	}
-	if(cmd[0] == 0)	// 先頭がゼロなら無効行
-	{
-		goto EXIT;
-	}
-	while(ch != 0)
-	{
-		if(read(fifo_i_fd, &ch, 1) == 0)
-		{
-			usleep(100);
-			continue;
-		}
-		cmd[num++] = ch;
-	}
-	//printf("recieved:%s\n", cmd);
-	num = strlen((char *)cmd);
-
-	switch(cmd[0])
-	{
-	case 'R':	// Reset MZ
-		mz_reset();
-		break;
-	case 'C':	// Casette Tape
-		switch(cmd[1])
-		{
-		case 'T':	// Set Tape
-			if(ts700.cmt_tstates == 0)
-			{
-				sprintf(str, "%s/%s", PROGRAM_PATH, (char *)&cmd[2]);
-				set_mztData(str);
-				ts700.cmt_play = 0;
-			}
-			break;
-		case 'P':	// Play Tape
-			if(ts700.mzt_settape != 0)
-			{
-				ts700.cmt_play = 1;
-				ts700.mzt_start = ts700.cpu_tstates;
-				ts700.cmt_tstates = 1;
-				setup_cpuspeed(5);
-				sysst.motor = 1;
-				xferFlag |= SYST_MOTOR;
-			}
-			break;
-		case 'S':	// Stop Tape
-			if(ts700.cmt_tstates != 0)
-			{
-				ts700.cmt_play = 0;
-				ts700.cmt_tstates = 0;
-				setup_cpuspeed(1);
-				ts700.mzt_elapse += (ts700.cpu_tstates - ts700.mzt_start);
-			}
-			break;
-		case 'E':	// Eject Tape
-			if(ts700.cmt_tstates == 0)
-			{
-				ts700.mzt_settape = 0;
-			}
-			break;
-		default:
-			break;
-		}
-		break;
-	case 'P':	// PCG
-		if(cmd[1] == '0')	// OFF
-		{
-			hw700.pcg700_mode = 0;
-		}
-		else if(cmd[1] == '1')	// ON
-		{
-			hw700.pcg700_mode = 1;
-		}
-		break;
-	case 'K':	// Key in
-		kbdm.mtype = 1;
-		kbdm.len = num;
-		memcpy(kbdm.msg, &cmd[1], num);
-		msgsnd(q_kbd, &kbdm, 81, IPC_NOWAIT);
-		break;
-	case 'S':	// Set/Echo status
-		switch(cmd[1])
-		{
-		case 'R':	// Run
-			runmode = 1;
-			break;
-		case 'S':	// Stop
-			runmode = 0;
-			break;
-		case 'M':	// Monitor ROM
-			sprintf(MONROM_PATH, "%s/%s", PROGRAM_PATH, (char *)&cmd[2]);
-			monrom_load();
-			break;
-		case 'F':	// Font ROM
-			sprintf(CGROM_PATH, "%s/%s", PROGRAM_PATH, (char *)&cmd[2]);
-			font_load(CGROM_PATH);
-			break;
-		case 'C':	// CRT color
-			if(cmd[2] == '0')
-			{
-				c_bright = WHITE;	// WHITE
-			}
-			else if(cmd[2] == '1')
-			{
-				c_bright = GREEN;	// GREEN
-			}
-			break;
-		case 'E':	// Echo
-			xferFlag |= SYST_PCG|SYST_LED|SYST_CMT|SYST_MOTOR;
-			break;
-		default:
-			break;
-		}
-		break;
-	default:
-		break;
-	}
-
-EXIT:
-	if(runmode == 0)
-	{
-		usleep(3000);
-		goto REPEAT;
-	}
- */
 }
 
 //--------------------------------------------------------------
@@ -709,30 +358,12 @@ int mz80c_main()
   Serial.println("M5Z-700 START");
   M5.Lcd.println("M5Z-700 START");
 
-  Serial.println("LOAD CONFIG");
-  M5.Lcd.println("Load Config File");
-	loadConfig();
- 
-	//struct sigaction sa;
-  //char tmpPathStr[MAX_PATH];
-
-	//sigaction(SIGINT, NULL, &sa);
-	//sa.sa_handler = sighandler;
-	//sa.sa_flags = SA_NODEFER;
-	//sigaction(SIGINT, &sa, NULL);
-
   suspendScrnThreadFlag = false;
 
   c_bright = GREEN;
   serialKeyCode = 0;
 
-  updateRomList();
-  updateTapeList();
-
-  webStarted = false;
-  webCommand = WEB_C_NONE;
-  webCommandParam = "";
-  webCommandBreakFlag = false;
+  sendBreakFlag = false;
 
   pinMode(buttonApin, INPUT_PULLUP);
   pinMode(buttonBpin, INPUT_PULLUP);
@@ -744,36 +375,18 @@ int mz80c_main()
   joyPadPushed_B = false;
   joyPadPushed_Press = false;
   enableJoyPadButton = false;
-
-  btnBLongPressFlag = false;
-
-	//readlink("/proc/self/exe", tmpPathStr, sizeof(tmpPathStr));
-	//sprintf(PROGRAM_PATH, "%s", dirname(tmpPathStr));
-  
-	mz_screen_init();
+ 
+  mz_screen_init();
 	mz_alloc_mem();
-//	init_defkey();
-//	read_defkey();
+
 	makePWM();
  
-	// キー1行入力用メッセージキューの準備
-	//q_kbd = msgget(QID_KBD, IPC_CREAT);
-
-	// 外部プログラムとの通信の準備
-	//setupXfer();
-
 	// ＭＺのモニタのセットアップ
 	mz_mon_setup();
 
 	// メインループ実行
 	mainloop();
 
-	// 終了
-	//mzbeep_clean();
-  //end_defkey();
-	
-	saveConfig();
-  
   delay(1000);
  
 	mz_free_mem();
@@ -781,7 +394,6 @@ int mz80c_main()
 
 	return 0;
 }
-
 
 ////-------------------------------------------------------------
 ////  mz700win MAINLOOP
@@ -801,14 +413,11 @@ void mainloop(void)
 	Z80_IRQ = 0;
 //	Z80_Trap = 0x0556;
 
-	xferFlag |= SYST_BOOTUP;
-
-	// start the CPU emulation
+// start the CPU emulation
 
   Serial.println("START READ TAPE!");
   String message = "Tape Setting";
   updateStatusArea(message.c_str());
-  delay(100);
 
   if(strlen(mzConfig.tapeFile) == 0){
     set_mztData(DEFAULT_TAPE_FILE);
@@ -816,7 +425,7 @@ void mainloop(void)
     set_mztData(mzConfig.tapeFile);
   }
   Serial.println("END READ TAPE!");
-  delay(1000);
+
   updateStatusArea("");
 
   if(mzConfig.mzMode == MZMODE_80){
@@ -826,9 +435,7 @@ void mainloop(void)
     ak_tbl = ak_tbl_700;
     ak_tbl_s = ak_tbl_s_700;
   }
-  //keyboard_queue = xQueueCreate(10, sizeof(uint8_t));
-
-  delay(100);
+  
   /* スレッド　開始 */
   Serial.println("START_THREAD");
   start_thread();
@@ -837,24 +444,13 @@ void mainloop(void)
 
   while(!intByUser())
 	{
-		processWebCommand();	// Webからのコマンド処理
-
 		timeTmp = millis();
 		if (!Z80_Execute()) break;
 
     M5.update();
     if(M5.BtnA.wasPressed()){
-      inputStringEx = "LOAD";
-      Serial.println("buttonA pressed!");
-    }
-
-    if(M5.BtnB.wasReleased()){
-      if(btnBLongPressFlag != true){
-        if(ts700.mzt_settape != 0 && ts700.cmt_play == 0)
+      if(ts700.mzt_settape != 0 && ts700.cmt_play == 0)
         {
-          delay(100);
-          Serial.println("TAPE START");
-          delay(100);
           ts700.cmt_play = 1;
           ts700.mzt_start = ts700.cpu_tstates;
           ts700.cmt_tstates = 1;
@@ -862,46 +458,35 @@ void mainloop(void)
           sysst.motor = 1;
           xferFlag |= SYST_MOTOR;
          }else{
-            delay(100);
+            String message = "TAPE CAN'T START";
+            updateStatusArea(message.c_str());
+            delay(2000);
             Serial.println("TAPE CAN'T START");
-            delay(100);
          }
-      }else{
-        btnBLongPressFlag = false;
-      }
     }
-    if(M5.BtnC.wasPressed()){ 
-      if(webStarted){
-        stopWebServer();
-      }else{
-        startWebServer();
-      }
-    }
-    if(M5.BtnB.pressedFor(2000)){
-      if(btnBLongPressFlag != true){
-        btnBLongPressFlag = true;
-        //B長押しで、テープ選択画面
-        //選択時は画面描画止める
+
+    if(M5.BtnB.wasReleased()){
         suspendScrnThreadFlag = true;
+        delay(100);
         selectMzt();
         delay(100);
         suspendScrnThreadFlag = false;
-      }
-    }   
+    }
+    if(M5.BtnC.wasPressed()){ 
+      //メニュー表示
+      suspendScrnThreadFlag = true;
+      delay(100);
+      systemMenu();
+      delay(100);
+      suspendScrnThreadFlag = false;
+    }
     syncTmp = millis();
     if(synctime - (syncTmp - timeTmp) > 0){
       delay(synctime - (syncTmp - timeTmp));
     }else{
       delay(1);
     }
-#if _DEBUG
-		if (Z80_Trace)
-		{
-			usleep(1000000);
-		}
-#endif
 	}
-//	
 }
 
 //------------------------------------------------------------
@@ -909,11 +494,8 @@ void mainloop(void)
 //------------------------------------------------------------
 void setup_cpuspeed(int mul) {
 	int _iperiod;
-	//int a;
 
 	_iperiod = (CPU_SPEED*CpuSpeed*mul)/(100*IFreq);
-
-	//a = (per * 256) / 100;
 
 	_iperiod *= 256;
 	_iperiod >>= 8;
@@ -936,41 +518,6 @@ int create_thread(void)
 //--------------------------------------------------------------
 void start_thread(void)
 {
-/*	int st;
-
-	st = pthread_create(&scrn_thread_id, NULL, scrn_thread, NULL);
-	if(st != 0)
-	{
-		perror("update_scrn_thread");
-		return;
-	}
-
-	pthread_detach(scrn_thread_id);
- 
-	st = pthread_create(&keyin_thread_id, NULL, keyin_thread, NULL);
-	if(st != 0)
-	{
-		perror("keyin_thread");
-		return;
-	}
-  pthread_detach(keyin_thread_id);
-  
-  st = pthread_create(&webserver_thread_id, NULL, webserver_thread, NULL);
-  
-  if(st != 0) {
-    perror("webserver_thread");
-    return;
-  }
-  pthread_detach(webserver_thread_id);
-
-  st = pthread_create(&i2cKeyboard_thread_id, NULL, i2cKeyboard_thread, NULL);
-  
-  if(st != 0) {
-    perror("i2cKeyboard_thread");
-    return;
-  }
-  pthread_detach(i2cKeyboard_thread_id);
-*/
     xTaskCreatePinnedToCore(
                     scrn_thread,     /* Function to implement the task */
                     "scrn_thread",   /* Name of the task */
@@ -989,23 +536,6 @@ void start_thread(void)
                     NULL,      /* Task handle. */
                     0);        /* Core where the task should run */        
    
-    xTaskCreatePinnedToCore(
-                    webserver_thread,     /* Function to implement the task */
-                    "webserver_thread",   /* Name of the task */
-                    4096,      /* Stack size in words */
-                    NULL,      /* Task input parameter */
-                    1,         /* Priority of the task */
-                    NULL,      /* Task handle. */
-                    0);        /* Core where the task should run */
-
-//    xTaskCreatePinnedToCore(
-//                    i2cKeyboard_thread,     /* Function to implement the task */
-//                    "i2cKeyboard_thread",   /* Name of the task */
-//                    4096,      /* Stack size in words */
-//                    NULL,      /* Task input parameter */
-//                    1,         /* Priority of the task */
-//                    NULL,      /* Task handle. */
-//                    0);        /* Core where the task should run */                              
 }
 
 //--------------------------------------------------------------
@@ -1063,369 +593,115 @@ void keyin_thread(void *arg)
  
   while(!intByUser())
   {
-    if(webCommandBreakFlag == true){ //SHIFT+BREAK送信
-      mz_keydown_sub(0x80);
-      delay(60);
-      if(mzConfig.mzMode == MZMODE_700){
-        mz_keydown_sub(0x87);
-        delay(120);
-        mz_keyup_sub(0x87);
-      }else{
-        mz_keydown_sub(ak_tbl_s[3]);
-        delay(120);
-        mz_keyup_sub(ak_tbl_s[3]);
+    if(suspendScrnThreadFlag == false){
+
+      if(sendBreakFlag == true){ //SHIFT+BREAK送信
+        mz_keydown_sub(0x80);
+        delay(60);
+        if(mzConfig.mzMode == MZMODE_700){
+          mz_keydown_sub(0x87);
+          delay(120);
+          mz_keyup_sub(0x87);
+        }else{
+          mz_keydown_sub(ak_tbl_s[3]);
+          delay(120);
+          mz_keyup_sub(ak_tbl_s[3]);
+        }
+        
+        mz_keyup_sub(0x80);
+        delay(60);
+        sendBreakFlag = false;
       }
       
-      mz_keyup_sub(0x80);
-      delay(60);
-      webCommandBreakFlag = false;
-    }
-    
-    if(inputStringEx.length() > 0){
+      if(inputStringEx.length() > 0){
         doSendCommand(inputStringEx);
         inputStringEx = "";
-    }
-    
-    if (Serial.available() > 0) {
-      serialKeyCode = Serial.read();
-      Serial.println(serialKeyCode);
-      //Special Key
-      if( serialKeyCode == 27 ){ //ESC
+      }
+      
+      if (Serial.available() > 0) {
         serialKeyCode = Serial.read();
-        if(serialKeyCode == 91){
+        Serial.println(serialKeyCode);
+        //Special Key
+        if( serialKeyCode == 27 ){ //ESC
           serialKeyCode = Serial.read();
-          switch(serialKeyCode){
-            case 65:
-              serialKeyCode = 0x12;  //UP
-              break;
-            case 66:
-              serialKeyCode = 0x11;  //DOWN
-              break;
-            case 67:
-              serialKeyCode = 0x13;  //RIGHT
-              break;
-            case 68:
-              serialKeyCode = 0x14;  //LEFT
-              break;
-            case 49:
-              serialKeyCode = 0x15;  //HOME
-              break;
-            case 52:
-              serialKeyCode = 0x16;  //END -> CLR
-              break;
-            case 50:
-              serialKeyCode = 0x18;  //INST
-              break;
-            default:
-              serialKeyCode = 0;
+          if(serialKeyCode == 91){
+            serialKeyCode = Serial.read();
+            switch(serialKeyCode){
+              case 65:
+                serialKeyCode = 0x12;  //UP
+                break;
+              case 66:
+                serialKeyCode = 0x11;  //DOWN
+                break;
+              case 67:
+                serialKeyCode = 0x13;  //RIGHT
+                break;
+              case 68:
+                serialKeyCode = 0x14;  //LEFT
+                break;
+              case 49:
+                serialKeyCode = 0x15;  //HOME
+                break;
+              case 52:
+                serialKeyCode = 0x16;  //END -> CLR
+                break;
+              case 50:
+                serialKeyCode = 0x18;  //INST
+                break;
+              default:
+                serialKeyCode = 0;
+            }
+          }else if(serialKeyCode == 255)
+          {
+            //Serial.println("ESC");
+            //serialKeyCode = 0x03;  //ESC -> SHIFT + BREAK 
+            sendBreakFlag = true; //うまくキーコード処理できなかったのでWebからのBreak送信扱いにします。
+            serialKeyCode = 0;
           }
-        }else if(serialKeyCode == 255)
-        {
-          //Serial.println("ESC");
-          //serialKeyCode = 0x03;  //ESC -> SHIFT + BREAK 
-          webCommandBreakFlag = true; //うまくキーコード処理できなかったのでWebからのBreak送信扱いにします。
-          serialKeyCode = 0;
         }
+        if(serialKeyCode == 127){ //BackSpace
+          serialKeyCode = 0x17;
+        }
+        while(Serial.available() > 0 && Serial.read() != -1);
       }
-      if(serialKeyCode == 127){ //BackSpace
-        serialKeyCode = 0x17;
+      
+      inKeyCode = serialKeyCode;
+      serialKeyCode = 0;
+      if (inKeyCode != 0) {
+        if(ak_tbl[inKeyCode] == 0xff)
+        {
+          //何もしない
+        }
+        else if(ak_tbl[inKeyCode] == 0x80)
+        {
+              mz_keydown_sub(ak_tbl[inKeyCode]);
+              delay(60);
+              mz_keydown_sub(ak_tbl_s[inKeyCode]);
+              delay(60);
+              mz_keyup_sub(ak_tbl_s[inKeyCode]);
+              mz_keyup_sub(ak_tbl[inKeyCode]);
+              delay(60);
+        }
+        else
+        {
+              mz_keydown_sub(ak_tbl[inKeyCode]);
+              delay(60);
+              mz_keyup_sub(ak_tbl[inKeyCode]);
+              delay(60);
+        }
+      
       }
-      while(Serial.available() > 0 && Serial.read() != -1);
+      checkI2cKeyboard();
+      checkJoyPad();
     }
-    
-    inKeyCode = serialKeyCode;
-    serialKeyCode = 0;
-    if (inKeyCode != 0) {
-       if(ak_tbl[inKeyCode] == 0xff)
-       {
-        //何もしない
-       }
-       else if(ak_tbl[inKeyCode] == 0x80)
-       {
-            mz_keydown_sub(ak_tbl[inKeyCode]);
-            delay(60);
-            mz_keydown_sub(ak_tbl_s[inKeyCode]);
-            delay(60);
-            mz_keyup_sub(ak_tbl_s[inKeyCode]);
-            mz_keyup_sub(ak_tbl[inKeyCode]);
-            delay(60);
-       }
-       else
-       {
-            mz_keydown_sub(ak_tbl[inKeyCode]);
-            delay(60);
-            mz_keyup_sub(ak_tbl[inKeyCode]);
-            delay(60);
-       }
-     
-    }
-
-    checkI2cKeyboard();
-    checkJoyPad();
     delay(10);
   }
-	/*
-	int fd = 0, fd2, key_active = 0, i;
-	struct input_event event;
-	KBDMSG kbdm;
-
-	fd2 = open("/dev/input/mice", O_RDONLY);
-	if(fd2 != -1)
-	{
-		ioctl(fd2, EVIOCGRAB, 1);
-	}
-
-	while(!intByUser())
-	{
-		// キー入力
-		if(key_active == 0)
-		{
-			fd = open("/dev/input/event0", O_RDONLY);
-			if(fd != -1)
-			{
-				ioctl(fd, EVIOCGRAB, 1);
-				key_active = 1;	// キーデバイス確認、次回はキー入力
-			}
-		}
-		else
-		{
-			if(read(fd, &event, sizeof(event)) == sizeof(event))
-			{
-				if(event.type == EV_KEY)
-				{
-					switch(event.value)
-					{
-					case 0:
-						mz_keyup(event.code);
-						break;
-					case 1:
-						mz_keydown(event.code);
-						break;
-					default:
-						break;
-					}
-					//printf("code = %d, value = %d\n", event.code, event.value);
-				}
-			}
-			else
-			{
-				key_active = 0;	// キーデバイス消失、次回はデバイスオープンを再試行
-			}
-		}
-
-		// 外部プログラムからの1行入力
-		if(msgrcv(q_kbd, &kbdm, 81, 0, IPC_NOWAIT) != -1)
-		{
-			for(i = 0; i < kbdm.len; i++)
-			{
-				if(ak_tbl[kbdm.msg[i]] == 0xff)
-				{
-					continue;
-				}
-				else if(ak_tbl[kbdm.msg[i]] == 0x80)
-				{
-					mz_keydown_sub(ak_tbl[kbdm.msg[i]]);
-					usleep(60000);
-					mz_keydown_sub(ak_tbl_s[kbdm.msg[i]]);
-					usleep(60000);
-					mz_keyup_sub(ak_tbl_s[kbdm.msg[i]]);
-					mz_keyup_sub(ak_tbl[kbdm.msg[i]]);
-					usleep(60000);
-				}
-				else
-				{
-					mz_keydown_sub(ak_tbl[kbdm.msg[i]]);
-					usleep(60000);
-					mz_keyup_sub(ak_tbl[kbdm.msg[i]]);
-					usleep(60000);
-				}
-			}
-		}
-		usleep(10000);
-	}
-
-	ioctl(fd, EVIOCGRAB, 0);
-	close(fd);
-	ioctl(fd2, EVIOCGRAB, 0);
-	close(fd2);
-*/
-	return;// NULL;
+	return;
 }
 
 //--------------------------------------------------------------
-// Web処理スレッド 
+// 自動文字列入力
 //--------------------------------------------------------------
-void webserver_thread(void *arg)
-{ 
-  long synctime = 500;
-  long timeTmp;
-  long vsyncTmp;
-
-  while(!intByUser())
-  {
-    timeTmp = millis();
-    if(webStarted == true){ // && suspendWebThreadFlag == false){
-      webServer.handleClient();
-    }else{
-
-    }
-    vsyncTmp = millis();
-    if(synctime - (vsyncTmp - timeTmp) > 0){
-      delay(synctime - (vsyncTmp - timeTmp));
-    }else{
-      delay(1);
-    }
-  }
-  return;// NULL;
-}
-
-void suspendWebThread(bool flag){
-  suspendWebThreadFlag = flag;
-  delay(100);
-}
-
-//--------------------------------------------------------------
-// WebServerLogic
-//--------------------------------------------------------------
-
-bool startWebServer(){
-  suspendScrnThreadFlag = true;
-  delay(100);
-  if(strlen(mzConfig.ssid) == 0 || mzConfig.forceAccessPoint == true){
-    //アクセスポイントとして動作
-    String message = "Starting Access Point...";
-    updateStatusArea(message.c_str());
-    const IPAddress apIP(192, 168, 4, 1);
-    int randNumber = random(99999);
-    String adSSIDString = "M5Z700_" + String(randNumber);
-    const char* apSSID = adSSIDString.c_str();
-    Serial.print("Access Point Setting");
-    Serial.print("SSID:" + String(apSSID));
-    Serial.print("IP Address:" + String(apIP));
-
-    WiFi.mode(WIFI_MODE_STA);
-    WiFi.disconnect(true);
-    delay(1000);
-    WiFi.softAPConfig(apIP, apIP, IPAddress(255, 255, 255, 0));
-    WiFi.softAP(apSSID);
-    WiFi.mode(WIFI_MODE_AP);
-    message = "[SSID:" + String(apSSID) + "] http://" + apIP.toString();
-    updateStatusArea(message.c_str());
-  }else{
-    String message = "Starting WebServer...";
-    updateStatusArea(message.c_str());
-    WiFi.disconnect(true);
-    delay(1000);
-    WiFi.mode(WIFI_STA);
-    wifiMulti.addAP(mzConfig.ssid, mzConfig.pass);
-    Serial.println("Connecting Wifi...");
-    Serial.print("Web Server Setting");
-    Serial.print("SSID:" + String(mzConfig.ssid));
-    if(wifiMulti.run() == WL_CONNECTED) {
-      Serial.println("");
-      Serial.println("WiFi connected");
-      Serial.println("IP address: ");
-      Serial.println(WiFi.localIP());
-    }else{
-      message = "Connection Fail:" + String(mzConfig.ssid);
-      updateStatusArea(message.c_str());
-      suspendScrnThreadFlag = false;
-      return false;
-    }
-    
-//    WiFi.disconnect();
-//    delay(100);
-//    Serial.print("Web Server Setting");
-//    Serial.print("SSID:" + String(mzConfig.ssid));
-//   //Serial.print("PASS:" + String(mzConfig.pass));
-//    Serial.print("WiFi:Start");
-//    
-//    WiFi.begin(mzConfig.ssid, mzConfig.pass);
-//    uint32_t WIFItimeOut = millis();
-//    while (WiFi.status() != WL_CONNECTED) {
-//      delay(500);
-//      Serial.print(".");
-//      if( millis() - WIFItimeOut > 20000 ) {
-//        message = "Connection Fail:" + String(mzConfig.ssid);
-//        updateStatusArea(message.c_str());
-//        suspendScrnThreadFlag = false;
-//        return false;
-//      }
-//    }
-    Serial.println();
-    Serial.println("WiFi connected");
-    //M5.Lcd.println("Wi-Fi Connected");
-    delay(1000);
-    Serial.println(WiFi.localIP());
-    
-    message = "http://" + WiFi.localIP().toString();
-    updateStatusArea(message.c_str());
-  }  
-  webServer.on("/play", []() {
-    if(ts700.mzt_settape != 0)
-    {
-      ts700.cmt_play = 1;
-      ts700.mzt_start = ts700.cpu_tstates;
-      ts700.cmt_tstates = 1;
-      setup_cpuspeed(5);
-      sysst.motor = 1;
-      xferFlag |= SYST_MOTOR;
-    }
-    webServer.send(200, "text/html", makePage("Tape play started"));
-  });
-
-  webServer.on("/reset", []() {
-    mz_reset();
-    webServer.send(200, "text/html", makePage("Reset MZ Done"));
-  });
-
-  webServer.on("/selectRom", selectRom);
-  webServer.on("/selectTape",selectTape);
-  webServer.on("/sendCommand", sendCommand) ;
-  webServer.on("/sendBreakCommand", sendBreakCommand) ;
-  webServer.on("/setWiFi", setWiFi);
-  webServer.on("/deleteWiFi",deleteWiFi);
-  webServer.on("/soundSetting",soundSetting);
-  webServer.on("/PCGSetting",PCGSetting);
-  webServer.on("/", []() {
-    webServer.send(200, "text/html", makePage(""));
-  });
-
-  delay(100);
-  webServer.begin();
-  webStarted = true;
-  suspendScrnThreadFlag = false;
-  return true;
-}
-
-bool stopWebServer(){
-  suspendScrnThreadFlag = true;
-  delay(100);
-  Serial.println("WebServer:Stop");
-  webStarted = false;
-  webServer.stop();
-  //webServer.close();
-  Serial.println("WiFi:Disconnect");
-
-  WiFi.disconnect(true); 
-  updateStatusArea("");
-  
-  suspendScrnThreadFlag = false;
-  
-}
-
-void sendCommand(){
-  String commandString = urlDecode(webServer.arg("commandString"));
-  webCommandParam = commandString;
-  webCommand = WEB_C_SEND_COMMAND;
-  webServer.send(200, "text/html", makePage("sendCommand[" + commandString + "] Done"));
-}
-
-void sendBreakCommand(){
-  webCommand = WEB_C_SEND_BREAK_COMMAND;
-  webServer.send(200, "text/html", makePage("sendBreakCommand Done"));
-}
-
 void doSendCommand(String inputString){
   for(int i = 0;i < inputString.length();i++){
     char inKeyCode = inputString.charAt(i);
@@ -1460,257 +736,8 @@ void doSendCommand(String inputString){
   mz_keydown_sub(ak_tbl[13]);
   delay(200);
   mz_keyup_sub(ak_tbl[13]);
-
 }
 
-void selectRom(){
-    String romFile =  urlDecode(webServer.arg("romFile"));
-    webCommandParam = romFile;
-    webCommand = WEB_C_SELECT_ROM;
-    webServer.send(200, "text/html", makePage("Set ROM[ "+ romFile +"] Done"));
-}
-
-void selectTape(){
-    String tapeFile = urlDecode(webServer.arg("tapeFile"));
-    webCommandParam = tapeFile;
-    webCommand = WEB_C_SELECT_TAPE;
-}
-
-void setWiFi(){
-  String ssid = urlDecode(webServer.arg("ssid"));
-  String pass = urlDecode(webServer.arg("pass"));
-  strncpy(mzConfig.ssid, ssid.c_str(), 50);
-  strncpy(mzConfig.pass, pass.c_str(), 50);
-  
-  webServer.send(200, "text/html", makePage("Set SSID[ "+ ssid +"] and Pass Done."));
-  delay(100);
-  mz_exit(0);//再起動する。設定のセーブはプログラム終了時に行われる
-}
-
-void deleteWiFi(){
-  strncpy(mzConfig.ssid, "", 50);
-  strncpy(mzConfig.pass, "", 50);
-
-  webServer.send(200, "text/html", makePage("Delete SSID and Pass Done."));
-  delay(100);
-  mz_exit(0);//再起動する。設定のセーブはプログラム終了時に行われる
-}
-
-void soundSetting(){
-  String enableSound = urlDecode(webServer.arg("enableSound"));
-  if(enableSound.toInt()==1){
-    mzConfig.enableSound = true;
-  }else{
-    mzConfig.enableSound = false;
-    ledcWriteTone(LEDC_CHANNEL_0, 0);
-  }
-  String message = String("Set Sound[ ") + (mzConfig.enableSound?String("ON"):String("OFF"))  + String(" ] Done.");
-  webServer.send(200, "text/html", makePage(message));
-}
-
-void PCGSetting(){
-  String enablePCG = urlDecode(webServer.arg("enablePCG"));
-  if(enablePCG.toInt()==1){
-        hw700.pcg700_mode = 1;
-  }else{
-      hw700.pcg700_mode = 0;
-  }
-  String message = String("Set PCG[ ") + ((hw700.pcg700_mode == 1)?String("ON"):String("OFF"))  + String(" ] Done.");
-  webServer.send(200, "text/html", makePage(message));
-}
-
-String makePage(String message) {
-String s = "<!DOCTYPE html><meta charset=\"UTF-8\" /><meta name=\"viewport\" content=\"width=device-width\"><html><head>" 
-"<title>MZ-700 for M5Stack Setting</title>"
-"</head>" 
-"<body onLoad=\"document.commandForm.commandString.focus()\">" 
-"<button onClick=\"location.href='/'\">Reload</button><hr/>";
-if (message.length() > 0){
-  s+= "<span style='color:red;'>" + message + "</span><hr/>";
-}
-s += "<span>SD/MZROM/*.ROM</span>" 
-"<form action='/selectRom' method='post'>" 
-"<label>ROM: </label><select name='romFile'>";
-s += romListOptionHTML;
-s += "</select>" 
-"<input type='submit' value='SELECT ROM and REBOOT'>" 
-"</form>" 
-"<hr/>" 
-"<span>SD/MZROM/MZTAPE/*</span>" 
-"<form action='/selectTape' method='post'>" 
-"<label>TAPE: </label><select name='tapeFile'>";
-s += tapeListOptionHTML;
-s += "</select>"
-"<input type='submit' value='SELECT TAPE'>" 
-"</form>"
-"<br/>" 
-"<form action='/play' method='post'>" 
-"<input type='submit' value='TAPE PLAY'>" 
-"</form>" 
-"<hr/>" 
-"<form name='commandForm' action='/sendCommand' method='post'>" 
-"<input type='text' name='commandString'>" 
-"<input type='submit' value='SEND COMMAND'>" 
-"</form>" 
-"<br/>"
-"<form action='/sendBreakCommand' method='post'>" 
-"<input type='submit' value='SEND SHIFT+BREAK'>" 
-"</form>" 
-"<hr/>"
-"<div style='display:inline-flex'>"
-"<form action='/soundSetting' method='post'>" 
-"<input type='hidden' name='enableSound' value='1'>"
-"<input type='submit' value='Sound ON'>" 
-"</form> "
-"<form action='/soundSetting' method='post'>" 
-"<input type='hidden' name='enableSound' value='0'>"
-"<input type='submit' value='Sound OFF'>" 
-"</form></div>" 
-"<hr/>"
-"<div style='display:inline-flex'>"
-"<form action='/PCGSetting' method='post'>" 
-"<input type='hidden' name='enablePCG' value='1'>"
-"<input type='submit' value='PCG ON'>" 
-"</form> "
-"<form action='/PCGSetting' method='post'>" 
-"<input type='hidden' name='enablePCG' value='0'>"
-"<input type='submit' value='PCG OFF'>" 
-"</form></div>" ;
-
-//"<hr/>" 
-//"<form action='/crtColorChange' method='post'>" 
-//"<input type='submit' value='CRT COLOR CHANGE'>" 
-//"</form>" 
-//"<hr/>" 
-s += "<hr/>";
-s += "ROM:" + String(mzConfig.romFile) + "<br/>";
-s += "TAPE:" + String(mzConfig.tapeFile) + "<br/>";
-s += "SOUND:" + (mzConfig.enableSound?String("ON"):String("OFF")) + "<br/>";
-s += "PCG:" + ((hw700.pcg700_mode == 1)?String("ON"):String("OFF"))  + "<br/>";
-//s += "MZ MODE:" 
-//"CRT COLOR:" 
-//"Wi-Fi:" 
-//"CONNECTED" 
-//"SSOD:" 
-//"ACCESS POINT MODE" 
-//"SSID:" 
-
-s +="<br/><br/><hr/>"
-"<form action='/setWiFi' method='post'>" 
-"SSID<input type='text' name='ssid'>" 
-"<br/>" 
-"PASSWORD<input type='text' name='pass'>" 
-"<input type='submit' value='SET Wi-Fi SSID Info and REBOOT'>"
-"</form>" 
-"<hr/>"
-"<form action='/deleteWiFi' method='post'>" 
-"<input type='submit' value='DELETE Wi-Fi SSID Info and REBOOT'>" 
-"</form>" ;
-
-s += "</body>" 
-"</html>" ;
-  return s;
-}
-
-String urlDecode(String input) {
-  String s = input;
-  s.replace("%20", " ");
-  s.replace("+", " ");
-  s.replace("%21", "!");
-  s.replace("%22", "\"");
-  s.replace("%23", "#");
-  s.replace("%24", "$");
-  s.replace("%25", "%");
-  s.replace("%26", "&");
-  s.replace("%27", "\'");
-  s.replace("%28", "(");
-  s.replace("%29", ")");
-  s.replace("%30", "*");
-  s.replace("%31", "+");
-  s.replace("%2C", ",");
-  s.replace("%2E", ".");
-  s.replace("%2F", "/");
-  s.replace("%2C", ",");
-  s.replace("%3A", ":");
-  s.replace("%3A", ";");
-  s.replace("%3C", "<");
-  s.replace("%3D", "=");
-  s.replace("%3E", ">");
-  s.replace("%3F", "?");
-  s.replace("%40", "@");
-  s.replace("%5B", "[");
-  s.replace("%5C", "\\");
-  s.replace("%5D", "]");
-  s.replace("%5E", "^");
-  s.replace("%5F", "-");
-  s.replace("%60", "`");
-  return s;
-}
-
-void updateRomList(){
-  File romRoot;
-  delay(100);
-  romRoot = SD.open(ROM_DIRECTORY);
-
-  romListOptionHTML = "";
-  while(1){
-    File entry =  romRoot.openNextFile();
-    if(!entry){// no more files
-        break;
-    }
-    //ファイルのみ取得
-    if (!entry.isDirectory()) {
-        String fileName = entry.name();
-        String romName = fileName.substring(fileName.lastIndexOf("/") + 1);
-        String checkName = romName;
-        checkName.toUpperCase();
-        if(checkName.endsWith(".ROM")){
-          romListOptionHTML += "<option value=\"";
-          romListOptionHTML += romName;
-          romListOptionHTML += "\">";
-          romListOptionHTML += romName;
-          romListOptionHTML += "</option>";
-        }
-    }
-    
-    entry.close();
-  }
-  romRoot.close();
-}
-void updateTapeList(){
-  File tapeRoot;
-  delay(100);
-  tapeRoot = SD.open(TAPE_DIRECTORY);
-
-  tapeListOptionHTML = "";
-  tapeListCount = 0;
-  
-  while(1){
-    File entry =  tapeRoot.openNextFile();
-    if(!entry){// no more files
-        break;
-    }
-    //ファイルのみ取得
-    if (!entry.isDirectory()) {
-        String fileName = entry.name();
-        String tapeName = fileName.substring(fileName.lastIndexOf("/") + 1);
-        tapeList[tapeListCount] = tapeName;
-        tapeListCount++;
-    }
-    entry.close();
-  }
-  tapeRoot.close();
-  
-  aSortTapeList();
-
-  for(int index = 0;index < tapeListCount;index++){
-    tapeListOptionHTML += "<option value=\"";
-    tapeListOptionHTML += tapeList[index];
-    tapeListOptionHTML += "\">";
-    tapeListOptionHTML += tapeList[index];
-    tapeListOptionHTML += "</option>";
-  }
-}
 
 //--------------------------------------------------------------
 // JoyPadLogic
@@ -1903,7 +930,7 @@ uint8_t i2cKeyCode = 0;
       i2cKeyCode = 0x0B; //かなモード 0x0B にかなボタンを割り当てている。
       break;
     case 0x1B: //ESC
-      webCommandBreakFlag = true; //うまくキーコード処理できなかったのでWebからのBreak送信扱いにします。
+      sendBreakFlag = true; //うまくキーコード処理できなかったのでWebからのBreak送信扱いにします。
       return;              
     default:
       break;
@@ -1933,149 +960,357 @@ uint8_t i2cKeyCode = 0;
   
 }
 
-
 String selectMzt(){
+  File fileRoot;
+  String fileList[MAX_FILES];
+
+  M5.Lcd.fillScreen(TFT_BLACK);
+	M5.Lcd.setCursor(0, 0);
+  M5.Lcd.setTextSize(2);
+    
+  String fileDir = TAPE_DIRECTORY;
+  if (fileDir.endsWith("/") == true)
+  {
+    fileDir = fileDir.substring(0, fileDir.length() - 1);
+  }
+
+	if(SD.exists(fileDir)==false){
+		M5.Lcd.println("DIR NOT EXIST");
+		M5.Lcd.printf("[SD:%s/]",fileDir.c_str());
+		delay(5000);
+		M5.Lcd.fillScreen(TFT_BLACK);
+		return "";
+	}
+    fileRoot = SD.open(fileDir);
+    int fileListCount = 0;
+    
+    while (1)
+    {
+        File entry = fileRoot.openNextFile();
+        if (!entry)
+        { // no more files
+            break;
+        }
+        //ファイルのみ取得
+        if (!entry.isDirectory())
+        {
+            String fullFileName = entry.name();
+            String fileName = fullFileName.substring(fullFileName.lastIndexOf("/") + 1);
+            fileList[fileListCount] = fileName;
+            fileListCount++;
+            //Serial.println(fileName);
+        }
+        entry.close();
+    }
+    fileRoot.close();
+
+    int startIndex = 0;
+    int endIndex = startIndex + 10;
+    if (endIndex > fileListCount)
+    {
+        endIndex = fileListCount;
+    }
+
+    sortList(fileList, fileListCount);
+
+    boolean needRedraw = true;
+    int selectIndex = 0;
+	  int preStartIndex = 0;
+    bool isLongPress = false;
+    while (true)
+    {
+        if (needRedraw == true)
+        {
+            M5.Lcd.setCursor(0, 0);
+            startIndex = selectIndex - 5;
+            if (startIndex < 0)
+            {
+                startIndex = 0;
+            }
+            endIndex = startIndex + 12;
+            if (endIndex > fileListCount)
+            {
+                endIndex = fileListCount;
+                startIndex = endIndex - 12;
+                if(startIndex < 0){
+                    startIndex = 0;
+                }
+            }
+			if(preStartIndex != startIndex){
+            	M5.Lcd.fillRect(0,0,320,220,0);
+				preStartIndex = startIndex;				
+			}
+            for (int index = startIndex; index < endIndex + 1; index++)
+            {
+                if (index == selectIndex)
+                {
+                    M5.Lcd.setTextColor(TFT_GREEN);
+                }
+                else
+                {
+                    M5.Lcd.setTextColor(TFT_WHITE);
+                }
+                if (index == 0)
+                {
+                    M5.Lcd.println("[BACK]");
+                }
+                else
+                {
+                    M5.Lcd.println(fileList[index - 1].substring(0,26));
+                }
+            }
+            M5.Lcd.setTextColor(TFT_WHITE);
+
+            M5.Lcd.drawRect(0, 240 - 19, 100, 18, TFT_WHITE);
+            M5.Lcd.drawCentreString("U P", 53, 240 - 17, 1);
+            M5.Lcd.drawRect(110, 240 - 19, 100, 18, TFT_WHITE);
+            M5.Lcd.drawCentreString("SELECT", 159, 240 - 17, 1);
+            M5.Lcd.drawRect(220, 240 - 19, 100, 18, TFT_WHITE);
+            M5.Lcd.drawCentreString("DOWN", 266, 240 - 17, 1);
+            needRedraw = false;
+        }
+        M5.update();
+        if (M5.BtnA.pressedFor(500)){
+            isLongPress = true;
+            selectIndex--;
+            if (selectIndex < 0)
+            {
+                selectIndex = fileListCount;
+            }
+            needRedraw = true;
+            delay(100);
+        }
+        if (M5.BtnA.wasReleased())
+        {
+            if(isLongPress == true)
+            {
+                isLongPress = false;
+            }else{
+                selectIndex--;
+                if (selectIndex < 0)
+                {
+                    selectIndex = fileListCount;
+                }
+                needRedraw = true;
+            }
+        }
+        if (M5.BtnC.pressedFor(500)){
+            isLongPress = true;
+            selectIndex++;
+            if (selectIndex > fileListCount)
+            {
+                selectIndex = 0;
+            }
+            needRedraw = true;
+            delay(100);
+        }
+        if (M5.BtnC.wasReleased())
+        {
+            if(isLongPress == true)
+            {
+                isLongPress = false;
+            }else{
+                selectIndex++;
+                if (selectIndex > fileListCount)
+                {
+                    selectIndex = 0;
+                }
+                needRedraw = true;
+            }
+        }
+
+        if (M5.BtnB.wasReleased())
+        {
+            if (selectIndex == 0)
+            {
+                //何もせず戻る
+                M5.Lcd.fillScreen(TFT_BLACK);
+                delay(10);
+                return "";
+            }
+            else
+            {
+               Serial.print("select:");
+               Serial.println(fileList[selectIndex-1]);
+               delay(10);
+               M5.Lcd.fillScreen(TFT_BLACK);
+
+               strncpy(mzConfig.tapeFile, fileList[selectIndex-1].c_str(), 50);
+               set_mztData(mzConfig.tapeFile);
+               ts700.cmt_play = 0;
+         
+               M5.Lcd.setCursor(0,0);
+               M5.Lcd.print("Set:");
+               M5.Lcd.print(fileList[selectIndex -1]);
+               delay(2000);
+               M5.Lcd.fillScreen(TFT_BLACK);
+               delay(10);
+ 				       return fileList[selectIndex - 1];
+            }
+        }
+        delay(100);
+    }
+}    
+ 
+#define MENU_ITEM_COUNT 8
+#define PCG_INDEX 5
+#define SOUNT_INDEX 6
+void systemMenu()
+{
+  static String menuItem[] =
+  {
+   "[BACK]",
+   "RESET:NEW MONITOR7",
+   "RESET:NEW MONITOR",
+   "RESET:MZ-1Z009",
+   "RESET:SP-1002",
+   "PCG",
+   "SOUND",
+   "INPUT \"LOAD(CR)\"",
+   ""};
+
   delay(10);
   M5.Lcd.fillScreen(TFT_BLACK);
   delay(10);
   M5.Lcd.setTextSize(2);
-  String curTapeFile  = String(mzConfig.tapeFile);
+  bool needRedraw = true;
+
+  int menuItemCount = 0;
+  while(menuItem[menuItemCount] != ""){
+    menuItemCount++;
+  }
+
   int selectIndex = 0;
-  for(int index = 0;index < tapeListCount;index++){
-    if(tapeList[index].compareTo(curTapeFile)==0){
-      selectIndex = index;
-      break;
-    }
-  }
-  
-  int startIndex = 0;
-  int endIndex = startIndex + 10;
-  if(endIndex > tapeListCount){
-    endIndex = tapeListCount;
-  }
-  Serial.print("start:");
-  Serial.println(startIndex);
-  Serial.println("end:");
-  Serial.println(endIndex);
-  boolean needRedraw = true;
-  while(true){
+  delay(100);
+  M5.update();
 
-    if(needRedraw == true){
-      M5.Lcd.fillScreen(0);
-      M5.Lcd.setCursor(0,0);
-      startIndex = selectIndex - 5;
-      if(startIndex < 0){
-        startIndex = 0;
-      }
-
-      endIndex = startIndex + 13;
-      if(endIndex > tapeListCount -1){
-        endIndex = tapeListCount -1;
-      }
-
-      for(int index = startIndex;index < endIndex;index++){
-          if(index == selectIndex){
-             M5.Lcd.setTextColor(TFT_GREEN);
-          }else{
-            M5.Lcd.setTextColor(TFT_WHITE);
-          }
-          M5.Lcd.println(tapeList[index]);
-      }
-      M5.Lcd.setTextColor(TFT_WHITE);
-
-      M5.Lcd.drawRect(0, 240 - 19, 100 , 18, TFT_WHITE);
-      M5.Lcd.setCursor(35, 240 - 17);
-      M5.Lcd.print("U P");
-      M5.Lcd.drawRect(110, 240 - 19, 100 , 18, TFT_WHITE);
-      M5.Lcd.setCursor(125, 240 - 17);
-      M5.Lcd.print("SELECT");
-      M5.Lcd.drawRect(220, 240 - 19, 100 , 18, TFT_WHITE);
-      M5.Lcd.setCursor(245, 240 - 17);
-      M5.Lcd.print("DOWN");
-      needRedraw = false;
-    }
-    M5.update();
-    if(M5.BtnA.wasPressed()){
-      selectIndex--;
-      if(selectIndex < 0){
-        selectIndex = 0;
-      }
-      needRedraw = true;
-    }
-
-    if(M5.BtnC.wasPressed()){
-      selectIndex++;
-      if(selectIndex > tapeListCount - 1){
-        selectIndex = tapeListCount -1;
-      }
-      needRedraw = true;
-    }
-    
-    if(M5.BtnB.wasPressed()){
-      Serial.print("select:");
-      Serial.println(tapeList[selectIndex]);
-      delay(10);
-      M5.Lcd.fillScreen(TFT_BLACK);
-
-      strncpy(mzConfig.tapeFile, tapeList[selectIndex].c_str(), 50);
-      set_mztData(mzConfig.tapeFile);
-      saveConfig();
-      Serial.println("saveDone");
-      ts700.cmt_play = 0;
-         
-      M5.Lcd.setCursor(0,0);
-      M5.Lcd.print("Set:");
-      M5.Lcd.print(tapeList[selectIndex]);
-      delay(2000);
-      M5.Lcd.fillScreen(TFT_BLACK);
-      delay(10);
-      return tapeList[selectIndex];
-    }    
-    delay(100);
-  }
-}
-
-
-/*
-void i2cKeyboard_thread(void *arg){
-  while(!intByUser())
+  while (true)
   {
-    if(Wire.requestFrom(CARDKB_ADDR, 1)){  // request 1 byte from keyboard
-      while (Wire.available()) {
-        char i2cKeyCode = Wire.read();                  // receive a byte as 
-        if(i2cKeyCode != 0) {
-          xQueueSendFromISR(keyboard_queue, &i2cKeyCode, NULL);
-          //Serial.println(i2cKeyCode, HEX);
+    if (needRedraw == true)
+    {
+      M5.Lcd.setCursor(0, 0);
+      for (int index = 0; index < menuItemCount; index++)
+      {
+        if (index == selectIndex)
+        {
+          M5.Lcd.setTextColor(TFT_GREEN);
         }
-        break;
+        else
+        {
+          M5.Lcd.setTextColor(TFT_WHITE);
+        }
+        String curItem = menuItem[index];
+        if(index == PCG_INDEX){
+          curItem = curItem + ((hw700.pcg700_mode == 1)?String(": ON"):String(": OFF"));
+        }
+        if(index == SOUNT_INDEX){
+          curItem = curItem + (mzConfig.enableSound?String(": ON"):String(": OFF"));
+        }
+          M5.Lcd.println(curItem);
+        }
+        M5.Lcd.setTextColor(TFT_WHITE);
+        M5.Lcd.drawRect(0, 240 - 19, 100, 18, TFT_WHITE);
+        M5.Lcd.drawCentreString("U P", 53, 240 - 17, 1);
+        M5.Lcd.drawRect(110, 240 - 19, 100, 18, TFT_WHITE);
+        M5.Lcd.drawCentreString("SELECT", 159, 240 - 17, 1);
+        M5.Lcd.drawRect(220, 240 - 19, 100, 18, TFT_WHITE);
+        M5.Lcd.drawCentreString("DOWN", 266, 240 - 17, 1);
+        needRedraw = false;
       }
+      M5.update();
+      if (M5.BtnA.wasReleased())
+      {
+        selectIndex--;
+        if (selectIndex < 0)
+        {
+          selectIndex = menuItemCount -1;
+        }
+        needRedraw = true;
+      }
+
+      if (M5.BtnC.wasReleased())
+      {
+        selectIndex++;
+        if (selectIndex >= menuItemCount)
+        {
+          selectIndex = 0;
+        }
+        needRedraw = true;
+      }
+
+      if (M5.BtnB.wasReleased())
+      {
+        if (selectIndex == 0)
+        {
+          M5.Lcd.fillScreen(TFT_BLACK);
+          delay(10);
+          return;
+        }
+        switch (selectIndex)
+        {
+          case 1:
+            strcpy(mzConfig.romFile, "NEWMON7.ROM");
+            break;
+          case 2:
+            strcpy(mzConfig.romFile, "NEWROM.ROM");
+            break;
+          case 3:
+            strcpy(mzConfig.romFile, "1Z009.ROM");
+            break;
+          case 4:
+            strcpy(mzConfig.romFile, "SP-1002.ROM");
+            break;
+          case PCG_INDEX:
+            hw700.pcg700_mode = (hw700.pcg700_mode == 1)?0:1;
+            break;
+          case SOUNT_INDEX:
+            mzConfig.enableSound = mzConfig.enableSound?false:true;
+            break;
+          case 7:
+                inputStringEx = "load";
+                M5.Lcd.fillScreen(TFT_BLACK);
+                delay(10);
+                return;
+
+          default:
+                M5.Lcd.fillScreen(TFT_BLACK);
+                delay(10);
+                return;
+        }
+        if(selectIndex >=1 && selectIndex <= 4){
+            M5.Lcd.fillScreen(TFT_BLACK);
+            M5.Lcd.setCursor(0, 0);
+            M5.Lcd.print("Reset MZ:");
+            M5.Lcd.println(mzConfig.romFile);
+            delay(2000);
+            monrom_load();
+            mz_reset();
+            return;
+        }
+        M5.Lcd.fillScreen(TFT_BLACK);
+        M5.Lcd.setCursor(0, 0);
+        needRedraw = true;
+      }
+      delay(100);
     }
-    checkJoyPad();
-    delay(5);
-    
-  }
 }
-*/
 
-
-/* bubble sort filenames */
 //https://github.com/tobozo/M5Stack-SD-Updater/blob/master/examples/M5Stack-SD-Menu/M5Stack-SD-Menu.ino
-void aSortTapeList() {
-  
+void sortList(String fileList[], int fileListCount) { 
   bool swapped;
   String temp;
   String name1, name2;
   do {
     swapped = false;
-    for(uint16_t i=0; i<tapeListCount-1; i++ ) {
-      name1 = tapeList[i];
+    for(int i = 0; i < fileListCount-1; i++ ) {
+      name1 = fileList[i];
       name1.toUpperCase();
-      name2 = tapeList[i+1];
+      name2 = fileList[i+1];
       name2.toUpperCase();
       if (name1.compareTo(name2) > 0) {
-        temp = tapeList[i];
-        tapeList[i] = tapeList[i+1];
-        tapeList[i+1] = temp;
+        temp = fileList[i];
+        fileList[i] = fileList[i+1];
+        fileList[i+1] = temp;
         swapped = true;
       }
     }

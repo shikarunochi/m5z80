@@ -1252,7 +1252,7 @@ void systemMenu()
             strcpy(mzConfig.romFile, "NEWMON7.ROM");
             break;
           case 2:
-            strcpy(mzConfig.romFile, "NEWROM.ROM");
+            strcpy(mzConfig.romFile, "NEWMON.ROM");
             break;
           case 3:
             strcpy(mzConfig.romFile, "1Z009.ROM");

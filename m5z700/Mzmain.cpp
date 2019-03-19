@@ -298,6 +298,14 @@ void monrom_load(void)
   Serial.print("MZ TYPE=");
   Serial.println(mzConfig.mzMode);
   
+  if(mzConfig.mzMode == MZMODE_80){
+    ak_tbl = ak_tbl_80c;
+    ak_tbl_s = ak_tbl_s_80c;
+  }else{
+    ak_tbl = ak_tbl_700;
+    ak_tbl_s = ak_tbl_s_700;
+  }
+  
 }
 
 int set_mztype(void){
@@ -427,14 +435,6 @@ void mainloop(void)
   Serial.println("END READ TAPE!");
 
   updateStatusArea("");
-
-  if(mzConfig.mzMode == MZMODE_80){
-    ak_tbl = ak_tbl_80c;
-    ak_tbl_s = ak_tbl_s_80c;
-  }else{
-    ak_tbl = ak_tbl_700;
-    ak_tbl_s = ak_tbl_s_700;
-  }
   
   /* スレッド　開始 */
   Serial.println("START_THREAD");
@@ -620,7 +620,7 @@ void keyin_thread(void *arg)
       
       if (Serial.available() > 0) {
         serialKeyCode = Serial.read();
-        Serial.println(serialKeyCode);
+        //Serial.println(serialKeyCode);
         //Special Key
         if( serialKeyCode == 27 ){ //ESC
           serialKeyCode = Serial.read();
@@ -895,7 +895,7 @@ uint8_t i2cKeyCode = 0;
     return;
   }
 
-  Serial.println(i2cKeyCode, HEX);
+  //Serial.println(i2cKeyCode, HEX);
 
   //特殊キー
   switch(i2cKeyCode){

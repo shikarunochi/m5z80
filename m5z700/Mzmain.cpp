@@ -51,8 +51,8 @@ extern "C" {
 
 static bool intFlag = false;
 
-void scrn_thread(void *arg);
-void keyin_thread(void *arg);
+void scrn_draw();
+void keyCheck();
 
 void systemMenu();
 
@@ -62,7 +62,11 @@ int buttonApin = 26; //赤ボタン
 int buttonBpin = 36; //青ボタン
 
 #define CARDKB_ADDR 0x5F
-void checkI2cKeyboard();
+int checkI2cKeyboard();
+int checkSerialKey();
+int keyCheckCount;
+int preKeyCode;
+bool inputStringMode;
 
 void sortList(String fileList[], int fileListCount);
 
@@ -147,6 +151,7 @@ unsigned char ak_tbl_s_700[] =
   0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x70, 0x13, 0x71, 0x66, 0xff
 };
 
+#define SHIFT_KEY 0x80
 unsigned char *ak_tbl;
 unsigned char *ak_tbl_s;
 
@@ -383,7 +388,11 @@ int mz80c_main()
   joyPadPushed_B = false;
   joyPadPushed_Press = false;
   enableJoyPadButton = false;
- 
+
+  keyCheckCount = 0;
+  preKeyCode = -1;
+  inputStringMode = false;
+
   mz_screen_init();
 	mz_alloc_mem();
 
@@ -446,6 +455,9 @@ void mainloop(void)
 	{
 		timeTmp = millis();
 		if (!Z80_Execute()) break;
+
+    scrn_draw();
+    keyCheck();
 
     M5.update();
     if(M5.BtnA.wasPressed()){
@@ -518,24 +530,6 @@ int create_thread(void)
 //--------------------------------------------------------------
 void start_thread(void)
 {
-    xTaskCreatePinnedToCore(
-                    scrn_thread,     /* Function to implement the task */
-                    "scrn_thread",   /* Name of the task */
-                    4096,      /* Stack size in words */
-                    NULL,      /* Task input parameter */
-                    1,         /* Priority of the task */
-                    NULL,      /* Task handle. */
-                    1);        /* Core where the task should run */
-    
-    xTaskCreatePinnedToCore(
-                    keyin_thread,     /* Function to implement the task */
-                    "keyin_thread",   /* Name of the task */
-                    4096,      /* Stack size in words */
-                    NULL,      /* Task input parameter */
-                    1,         /* Priority of the task */
-                    NULL,      /* Task handle. */
-                    0);        /* Core where the task should run */        
-   
 }
 
 //--------------------------------------------------------------
@@ -552,192 +546,172 @@ void suspendScrnThread(bool flag){
 }
 
 //--------------------------------------------------------------
-// 画面描画スレッド 
+// 画面描画
 //--------------------------------------------------------------
-void scrn_thread(void *arg)
+void scrn_draw()
 {
-  //long synctime = 17;// 60fps
   long synctime = 50;// 20fps
   long timeTmp;
   long vsyncTmp;
-
-	while(!intByUser())
-	{
-    if(suspendScrnThreadFlag == false){
+  if(suspendScrnThreadFlag == false){
   		// 画面更新処理
   		hw700.retrace = 1;											/* retrace = 0 : in v-blnk */
   		vblnk_start();
       timeTmp = millis();
-  		
-  		update_scrn();												/* 画面描画 */
-      vsyncTmp = millis();
-      
+
+      //前回から時間が経っていれば描画		
       if(synctime - (vsyncTmp - timeTmp) > 0){
-        delay(synctime - (vsyncTmp - timeTmp));
-      }else{
-        delay(1);
+  		  update_scrn();												/* 画面描画 */
+        vsyncTmp = millis();
       }
-    }else{
-       delay(synctime);
     }
-	}
-	return;// NULL;
-}
-
-//--------------------------------------------------------------
-// キーボード入力スレッド
-//--------------------------------------------------------------
-void keyin_thread(void *arg)
-{
-  char inKeyCode = 0;
- 
-  while(!intByUser())
-  {
-    if(suspendScrnThreadFlag == false){
-
-      if(sendBreakFlag == true){ //SHIFT+BREAK送信
-        mz_keydown_sub(0x80);
-        delay(60);
-        if(mzConfig.mzMode == MZMODE_700){
-          mz_keydown_sub(0x87);
-          delay(120);
-          mz_keyup_sub(0x87);
-        }else{
-          mz_keydown_sub(ak_tbl_s[3]);
-          delay(120);
-          mz_keyup_sub(ak_tbl_s[3]);
-        }
-        
-        mz_keyup_sub(0x80);
-        delay(60);
-        sendBreakFlag = false;
-      }
-      
-      if(inputStringEx.length() > 0){
-        doSendCommand(inputStringEx);
-        inputStringEx = "";
-      }
-      
-      if (Serial.available() > 0) {
-        serialKeyCode = Serial.read();
-        //Serial.println(serialKeyCode);
-        //Special Key
-        if( serialKeyCode == 27 ){ //ESC
-          serialKeyCode = Serial.read();
-          if(serialKeyCode == 91){
-            serialKeyCode = Serial.read();
-            switch(serialKeyCode){
-              case 65:
-                serialKeyCode = 0x12;  //UP
-                break;
-              case 66:
-                serialKeyCode = 0x11;  //DOWN
-                break;
-              case 67:
-                serialKeyCode = 0x13;  //RIGHT
-                break;
-              case 68:
-                serialKeyCode = 0x14;  //LEFT
-                break;
-              case 49:
-                serialKeyCode = 0x15;  //HOME
-                break;
-              case 52:
-                serialKeyCode = 0x16;  //END -> CLR
-                break;
-              case 50:
-                serialKeyCode = 0x18;  //INST
-                break;
-              default:
-                serialKeyCode = 0;
-            }
-          }else if(serialKeyCode == 255)
-          {
-            //Serial.println("ESC");
-            //serialKeyCode = 0x03;  //ESC -> SHIFT + BREAK 
-            sendBreakFlag = true; //うまくキーコード処理できなかったのでWebからのBreak送信扱いにします。
-            serialKeyCode = 0;
-          }
-        }
-        if(serialKeyCode == 127){ //BackSpace
-          serialKeyCode = 0x17;
-        }
-        while(Serial.available() > 0 && Serial.read() != -1);
-      }
-      
-      inKeyCode = serialKeyCode;
-      serialKeyCode = 0;
-      if (inKeyCode != 0) {
-        if(ak_tbl[inKeyCode] == 0xff)
-        {
-          //何もしない
-        }
-        else if(ak_tbl[inKeyCode] == 0x80)
-        {
-              mz_keydown_sub(ak_tbl[inKeyCode]);
-              delay(60);
-              mz_keydown_sub(ak_tbl_s[inKeyCode]);
-              delay(60);
-              mz_keyup_sub(ak_tbl_s[inKeyCode]);
-              mz_keyup_sub(ak_tbl[inKeyCode]);
-              delay(60);
-        }
-        else
-        {
-              mz_keydown_sub(ak_tbl[inKeyCode]);
-              delay(60);
-              mz_keyup_sub(ak_tbl[inKeyCode]);
-              delay(60);
-        }
-      
-      }
-      checkI2cKeyboard();
-      checkJoyPad();
-    }
-    delay(10);
-  }
 	return;
 }
 
 //--------------------------------------------------------------
-// 自動文字列入力
+// キーボード入力チェック
 //--------------------------------------------------------------
-void doSendCommand(String inputString){
-  for(int i = 0;i < inputString.length();i++){
-    char inKeyCode = inputString.charAt(i);
-    if (inKeyCode != 0) {
-      if(ak_tbl[inKeyCode] == 0xff)
-      {
-        //何もしない
-        delay(100);
-      }
-      else if(ak_tbl[inKeyCode] == 0x80)
-      {
-        mz_keydown_sub(ak_tbl[inKeyCode]);
-        delay(200);
-        mz_keydown_sub(ak_tbl_s[inKeyCode]);
-        delay(200);
-        mz_keyup_sub(ak_tbl_s[inKeyCode]);
-        mz_keyup_sub(ak_tbl[inKeyCode]);
-        delay(200);
-      }
-      else
-      {
-        mz_keydown_sub(ak_tbl[inKeyCode]);
-        delay(200);
-        mz_keyup_sub(ak_tbl[inKeyCode]);
-        delay(200);
-      }
+void keyCheck(){
+  //入力がある場合、5回は入力のまま。
+  if(preKeyCode != -1){
+    keyCheckCount++;
+    if(keyCheckCount < 5){
+      return;
     }
-    delay(200);
+    mz_keyup_sub(preKeyCode);
+    mz_keyup_sub(SHIFT_KEY); 
+    preKeyCode = -1;
+    keyCheckCount = 0;
   }
-  delay(10);
-  //最後に改行コード
-  mz_keydown_sub(ak_tbl[13]);
-  delay(200);
-  mz_keyup_sub(ak_tbl[13]);
+  if(sendBreakFlag == true){ //SHIFT+BREAK送信
+      mz_keydown_sub(SHIFT_KEY);
+      if(mzConfig.mzMode == MZMODE_700){
+        mz_keydown_sub(0x87);
+        preKeyCode = 0x87;
+      }else{
+          mz_keydown_sub(ak_tbl_s[3]);
+          preKeyCode = ak_tbl_s[3];
+      }
+      sendBreakFlag = false;
+      return;
+  }
+
+  char inKeyCode = 0;
+  checkJoyPad();
+  
+  //特別扱いのキー（ジョイパッドボタン用）
+  bool ctrlFlag = false;
+  bool shiftFlag = false;
+  
+  //inputStringExが入っている場合は、１文字ずつ入力処理    
+  if(inputStringEx.length() > 0){
+      inKeyCode = inputStringEx.charAt(0);
+      if(inKeyCode == 'C'){ //CTRL
+        ctrlFlag = true;
+      }
+      if(inKeyCode == 'S'){ //SHIFT
+        shiftFlag = true;
+      }
+      inputStringEx = inputStringEx.substring(1);
+  }else{
+    if(inputStringMode == true){
+      inKeyCode = 0x0D;
+      inputStringMode = false;
+    }
+  }
+
+  if(ctrlFlag == false && shiftFlag == false){
+    //キー入力
+    if(inKeyCode == 0){
+      inKeyCode = checkSerialKey();
+    }
+    if(inKeyCode == 0){
+      inKeyCode = checkI2cKeyboard();
+    }
+    if(inKeyCode == 0){
+      return;
+    }
+    if(ak_tbl[inKeyCode] == 0xff)
+    {
+          //何もしない
+    }
+    else if(ak_tbl[inKeyCode] == SHIFT_KEY)
+    {
+      mz_keydown_sub(SHIFT_KEY);
+      mz_keydown_sub(ak_tbl_s[inKeyCode]);
+    }
+    else
+    {
+      mz_keydown_sub(ak_tbl[inKeyCode]);
+    } 
+    preKeyCode = ak_tbl[inKeyCode];
+  }else{
+    if(ctrlFlag == true){
+      mz_keydown_sub(0x86);
+      preKeyCode = 0x86;
+      ctrlFlag = false;
+    }
+    if(shiftFlag == true){
+      mz_keydown_sub(0x80);
+      preKeyCode = 0x80;
+      shiftFlag = false;
+      
+    }
+
+  }
 }
 
+//--------------------------------------------------------------
+// シリアル入力
+//--------------------------------------------------------------
+int checkSerialKey()
+{
+  if (Serial.available() > 0) {
+    serialKeyCode = Serial.read();
+    if( serialKeyCode == 27 ){ //ESC
+      serialKeyCode = Serial.read();
+      if(serialKeyCode == 91){
+        serialKeyCode = Serial.read();
+        switch(serialKeyCode){
+          case 65:
+            serialKeyCode = 0x12;  //UP
+            break;
+          case 66:
+            serialKeyCode = 0x11;  //DOWN
+            break;
+          case 67:
+            serialKeyCode = 0x13;  //RIGHT
+            break;
+          case 68:
+            serialKeyCode = 0x14;  //LEFT
+            break;
+          case 49:
+            serialKeyCode = 0x15;  //HOME
+            break;
+          case 52:
+            serialKeyCode = 0x16;  //END -> CLR
+            break;
+          case 50:
+            serialKeyCode = 0x18;  //INST
+            break;
+          default:
+            serialKeyCode = 0;
+        }
+      }else if(serialKeyCode == 255)
+      {
+        //Serial.println("ESC");
+        //serialKeyCode = 0x03;  //ESC -> SHIFT + BREAK 
+        sendBreakFlag = true; //うまくキーコード処理できなかったのでWebからのBreak送信扱いにします。
+        serialKeyCode = 0;
+      }
+    }
+    if(serialKeyCode == 127){ //BackSpace
+      serialKeyCode = 0x17;
+    }
+    while(Serial.available() > 0 && Serial.read() != -1);
+  }
+	return serialKeyCode;
+}
 
 //--------------------------------------------------------------
 // JoyPadLogic
@@ -789,7 +763,6 @@ void checkJoyPad(){
     //カーソル上を押す
     mz_keydown_sub(0x75);
     joyPadPushed_U = true;
-    delay(60);
   }else if(joyPadPushed_U == true && joyX > 80){
     //カーソル上を戻す
     mz_keyup_sub(0x75);
@@ -799,7 +772,6 @@ void checkJoyPad(){
     //カーソル下を押す
     mz_keydown_sub(0x74);
     joyPadPushed_D  =true;
-    delay(60);
   }else if(joyPadPushed_D == true && joyX < 160){
     //カーソル下を戻す
     mz_keyup_sub(0x74);
@@ -809,7 +781,6 @@ void checkJoyPad(){
     //カーソル左を押す
     mz_keydown_sub(0x72);
     joyPadPushed_L = true;
-    delay(60);
   }else if(joyPadPushed_L == true && joyY > 80){
     //カーソル左を戻す
     mz_keyup_sub(0x72);
@@ -819,71 +790,44 @@ void checkJoyPad(){
     //カーソル右を押す
     mz_keydown_sub(0x73);
     joyPadPushed_R = true;
-    delay(60);
   }else if(joyPadPushed_R == true && joyY < 160){
     //カーソル右を戻す
     mz_keyup_sub(0x73);
     joyPadPushed_R = false;
   }
   if(joyPadPushed_A == false && buttonA == 1){
-    //CTRL & SPACE & 1 押下して戻す
-    mz_keydown_sub(0x64);
-    delay(60);
-    mz_keyup_sub(0x64);
-    delay(10);
-    mz_keydown_sub(0x86);
-    delay(60);
-    mz_keyup_sub(0x86);
-    delay(10);
-    mz_keydown_sub(0x57);
-    delay(60);
-    mz_keyup_sub(0x57);
-    //joyPadPushed_A = true;
-  }else if(joyPadPushed_R == true && buttonA == 0){
-    //スペースを戻す
-    //mz_keyup_sub(0x64);
-    //delay(10);
-    //mz_keyup_sub(0x86);
+    //CTRL & SPACE & 1 順に押下
+    if(inputStringEx.length()==0){
+      inputStringEx = " 1C"; //C=CTRL
+    }
+    joyPadPushed_A = true;
+  }else if(joyPadPushed_A == true && buttonA == 0){
     joyPadPushed_A = false;
   }
   if(joyPadPushed_B == false && buttonB == 1){
-    //SHIFT & 3 押下して戻す
-    mz_keydown_sub(0x80);
-    delay(60);
-    mz_keyup_sub(0x80);
-    delay(10);
-    mz_keydown_sub(0x55);
-    delay(60);
-    mz_keyup_sub(0x55);
-    //joyPadPushed_B = true;
+    if(inputStringEx.length()==0){
+      //SHIFT & 3 順に押下
+      inputStringEx = "3S"; //S=SHIFT
+    }
   }else if(joyPadPushed_B == true && buttonB == 0){
-    //SHIFTを戻す
-    //mz_keyup_sub(0x80);
-    //joyPadPushed_B = false;
+    joyPadPushed_B = false;
   }
   if(joyPadPushed_Press == false && joyPress == 1){
     //CR&S押下
-    mz_keydown_sub(0x00);
-    delay(60);
-    mz_keyup_sub(0x00);
-    delay(10);
-    mz_keydown_sub(0x25);
-    delay(60);
-    mz_keyup_sub(0x25);
+    if(inputStringEx.length()==0){
+      inputStringEx = "s";
+      inputStringMode = true; //このフラグによりCR が押下される
+    }
     joyPadPushed_Press = true;
 
   }else if(joyPadPushed_Press == true && joyPress == 0){
-    //CRを戻す
-    mz_keyup_sub(0x00);
-    delay(10);
-    mz_keyup_sub(0x25);
     joyPadPushed_Press = false;
   }
 }
 //--------------------------------------------------------------
 // I2C Keyboard Logic
 //--------------------------------------------------------------
-void checkI2cKeyboard(){
+int checkI2cKeyboard(){
 uint8_t i2cKeyCode = 0;  
   if(Wire.requestFrom(CARDKB_ADDR, 1)){  // request 1 byte from keyboard
     while (Wire.available()) {
@@ -892,7 +836,7 @@ uint8_t i2cKeyCode = 0;
     }
   }
   if(i2cKeyCode == 0){
-    return;
+    return 0;
   }
 
   //Serial.println(i2cKeyCode, HEX);
@@ -931,32 +875,11 @@ uint8_t i2cKeyCode = 0;
       break;
     case 0x1B: //ESC
       sendBreakFlag = true; //うまくキーコード処理できなかったのでWebからのBreak送信扱いにします。
-      return;              
+      return 0;              
     default:
       break;
   }
-
-  if(ak_tbl[i2cKeyCode] == 0xff)
-  {
-        //何もしない
-  }
-  else if(ak_tbl[i2cKeyCode] == 0x80)
-  {
-    mz_keydown_sub(ak_tbl[i2cKeyCode]);
-    delay(60);
-    mz_keydown_sub(ak_tbl_s[i2cKeyCode]);
-    delay(60);
-    mz_keyup_sub(ak_tbl_s[i2cKeyCode]);
-    mz_keyup_sub(ak_tbl[i2cKeyCode]);
-    delay(60);
-  }
-  else
-  {
-    mz_keydown_sub(ak_tbl[i2cKeyCode]);
-    delay(60);
-    mz_keyup_sub(ak_tbl[i2cKeyCode]);
-    delay(60);
-  } 
+  return i2cKeyCode;
   
 }
 
@@ -1268,6 +1191,7 @@ void systemMenu()
             break;
           case 7:
                 inputStringEx = "load";
+                inputStringMode = true;
                 M5.Lcd.fillScreen(TFT_BLACK);
                 delay(10);
                 return;

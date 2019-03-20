@@ -213,14 +213,14 @@ void update_scrn(void)
       fb.drawBitmap(cx * 8, cy * 8, fontPtr, 8, 8, fgColor);
     }
   }
-  fb.pushSprite(0, 0);    
+
   fb.setTextColor(TFT_WHITE);
   fb.setTextSize(2);
   fb.fillRect(0,200,260,40,TFT_BLACK);
   fb.setCursor(0,210);
   //M5.Lcd.drawString(message,0,228);
   fb.print(statusAreaMessage);
-       
+  fb.pushSprite(0, 0);           
 //			clock_gettime(CLOCK_MONOTONIC_RAW, &h_split);
 //			do
 //			{

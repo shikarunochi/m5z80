@@ -578,7 +578,9 @@ void play8253(void)
 	  _8253_dat.setsound = 0;
 		//mzbeep_stop();
     //M5.Speaker.mute();
-    //ledcWriteTone(LEDC_CHANNEL_0, 0); // stop the tone playing:
+	#ifdef USE_SPEAKER
+    ledcWriteTone(LEDC_CHANNEL_0, 0); // stop the tone playing:
+	#endif	
 	}
 	else
 	if (freqtmp>=0) {
@@ -589,9 +591,11 @@ void play8253(void)
     //Serial.println(freqtmp);
     //M5.Speaker.mute();
     //M5.Speaker.tone(freqtmp);
-    if(mzConfig.enableSound){
-      //ledcWriteTone(LEDC_CHANNEL_0, 1000000 / freqtmp);
-    }
+    //if(mzConfig.enableSound){
+	#ifdef USE_SPEAKER
+	ledcWriteTone(LEDC_CHANNEL_0, 1000000 / freqtmp);
+	#endif
+    //}
     //Serial.print("PLAY:");
     //Serial.println(1000000 / freqtmp);
 	}
@@ -600,7 +604,9 @@ void play8253(void)
 		// stop
 		//mzbeep_stop();
     //M5.Speaker.mute();
-    //ledcWriteTone(LEDC_CHANNEL_0, 0); // stop the tone playing:
+	#ifdef USE_SPEAKER
+    ledcWriteTone(LEDC_CHANNEL_0, 0); // stop the tone playing:
+	#endif
 	}
 }
 

@@ -762,6 +762,14 @@ int mz80c_main()
   btKeyboardConnect = false;
   M5.dis.drawpix(0, dispColor(50,0,0));
   
+  #ifndef USE_SPEAKER
+  m5lcd.println("SPEAKER: ENABLE[G26]");
+  m5lcd.println("CardKB: DISABLE");
+  #else
+  m5lcd.println("SPEAKER: DISABLE");
+  m5lcd.println("CardKB: ENABLE");
+  #endif
+
   suspendScrnThreadFlag = false;
 
   c_bright = GREEN;
@@ -854,7 +862,12 @@ void mainloop(void)
     if (!Z80_Execute()) break;
 
     scrn_draw(); 
+
+#ifndef USE_SPEAKER
+    //スピーカーピンが G26使うためGROVE WIRE と排他
     keyCheck();
+#endif
+
     hid_update();
     uint8_t buf[64];
     int n = hid_get(buf,sizeof(buf));    // called from emulation loop
@@ -1312,6 +1325,9 @@ int checkI2cKeyboard() {
 }
 
 String selectMzt() {
+  #ifdef USE_SPEAKER
+    ledcWriteTone(LEDC_CHANNEL_0, 0); // stop the tone playing:
+	#endif	
   File fileRoot;
   String fileList[MAX_FILES];
 
@@ -1508,7 +1524,7 @@ String selectMzt() {
           delay(2000);
           m5lcd.fillScreen(TFT_BLACK);
           delay(10);
-          //メモリに読み込んで
+          //メモリに読み込む
           setMztToMemory(fileList[selectIndex - 1]);
           return fileList[selectIndex - 1];
         //}
@@ -1645,7 +1661,9 @@ void systemMenu()
     "PCG",
     ""
   };
-
+	#ifdef USE_SPEAKER
+    ledcWriteTone(LEDC_CHANNEL_0, 0); // stop the tone playing:
+	#endif	
   delay(10);
   m5lcd.fillScreen(TFT_BLACK);
   delay(10);

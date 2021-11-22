@@ -104,4 +104,6 @@ enum MSGQID
 // use 5000 Hz as a LEDC base frequency
 #define LEDC_BASE_FREQ     5000
 // SPEAKER PIN
-//#define SPEAKER_PIN        25
+#ifdef USE_SPEAKER
+#define SPEAKER_PIN        26
+#endif

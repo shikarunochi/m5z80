@@ -27,8 +27,9 @@ int xorKey = 0x80;
 void setup() {
   M5.begin(true,false,true); 
   Serial.println("MAIN_START");
-  
+  #ifndef USE_SPEAKER
   Wire.begin(26,32,100000);
+  #endif
 
   //if(digitalRead(BUTTON_A_PIN) == 0) {
   //   Serial.println("Will Load menu binary");
@@ -43,9 +44,10 @@ void setup() {
   m5lcd.init();
 
   //Speaker Setup
-  //ledcSetup(LEDC_CHANNEL_0, LEDC_BASE_FREQ, LEDC_TIMER_13_BIT);
-  //ledcAttachPin(SPEAKER_PIN, LEDC_CHANNEL_0);
-  
+#ifdef USE_SPEAKER
+  ledcSetup(LEDC_CHANNEL_0, LEDC_BASE_FREQ, LEDC_TIMER_13_BIT);
+  ledcAttachPin(SPEAKER_PIN, LEDC_CHANNEL_0);
+#endif  
   mz80c_main();   
   exit(0);  
 }

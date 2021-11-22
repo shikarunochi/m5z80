@@ -762,7 +762,7 @@ int mz80c_main()
   btKeyboardConnect = false;
   M5.dis.drawpix(0, dispColor(50,0,0));
   
-  #ifndef USE_SPEAKER
+  #ifdef USE_SPEAKER
   m5lcd.println("SPEAKER: ENABLE[G26]");
   m5lcd.println("CardKB: DISABLE");
   #else

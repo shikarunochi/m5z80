@@ -593,7 +593,8 @@ void play8253(void)
     //M5.Speaker.tone(freqtmp);
     //if(mzConfig.enableSound){
 	#ifdef USE_SPEAKER
-	ledcWriteTone(LEDC_CHANNEL_0, 1000000 / freqtmp);
+	//ledcWriteTone(LEDC_CHANNEL_0, 1000000 / freqtmp);
+	ledcWriteTone(LEDC_CHANNEL_0, 500000 / freqtmp);
 	#endif
     //}
     //Serial.print("PLAY:");

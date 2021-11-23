@@ -1658,7 +1658,9 @@ void systemMenu()
     "RESET:NEW MONITOR",
     "RESET:MZ-1Z009",
     "RESET:SP-1002",
+  #ifndef USE_EXT_LCD
     "PCG",
+  #endif
     ""
   };
 	#ifdef USE_SPEAKER

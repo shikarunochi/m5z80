@@ -1,5 +1,5 @@
-#ifndef MX700LGX_H_
-#define MX700LGX_H_
+#ifndef MZ700LGX_H_
+#define MZ700LGX_H_
 
 #define LGFX_M5STACK     
 #include <M5Atom.h>

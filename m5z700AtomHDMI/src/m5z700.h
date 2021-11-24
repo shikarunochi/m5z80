@@ -1,3 +1,5 @@
+#ifndef M5Z700_H_
+#define M5Z700_H_
 # pragma GCC optimize ("Ofast")
 /* Typedef */
 typedef	unsigned int UINT32;
@@ -106,4 +108,5 @@ enum MSGQID
 // SPEAKER PIN
 #ifdef USE_SPEAKER
 #define SPEAKER_PIN        26
+#endif
 #endif

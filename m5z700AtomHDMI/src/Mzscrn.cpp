@@ -241,7 +241,7 @@ void update_scrn_thread(void *pvParameters)
           #else
             m5lcd.fillRect(cx * 8, cy * 8, 8, 8, bgColor);
           if (hw700.pcg700_mode == 0 || !(ch & 0x80)) {
-              fontPtr = &mz_font[(ch + fontOffset) * 6];
+              fontPtr = &mz_font[(ch + fontOffset) * 8];
           } else {
             if ((chAttr & 0x80) != 0x80) {
               fontPtr = &pcg700_font[(ch & 0x7F) * 8];

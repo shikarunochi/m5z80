@@ -1392,7 +1392,7 @@ String selectMzt() {
   int selectIndex = 0;
   int preStartIndex = 0;
   bool isLongPress = false;
-  bool isBottonLongPress = false;
+  bool isButtonLongPress = false;
   while (true)
   {
     if (needRedraw == true)
@@ -1421,7 +1421,7 @@ String selectMzt() {
       {
         if (index == selectIndex)
         {
-          if (isBottonLongPress == true && index != 0) {
+          if (isButtonLongPress == true && index != 0) {
             m5lcd.setTextColor(TFT_RED);
           } else {
             m5lcd.setTextColor(TFT_GREEN);
@@ -1484,8 +1484,8 @@ String selectMzt() {
     //  }
     //}
     if(M5.Btn.pressedFor(1000)){ //長押しになった場合色を変える
-      if( isBottonLongPress == false){
-             isBottonLongPress = true; 
+      if( isButtonLongPress == false){
+             isButtonLongPress = true; 
             needRedraw = true;
       }
     }
@@ -1680,7 +1680,7 @@ void systemMenu()
   int selectIndex = 0;
   delay(100);
   M5.update();
-
+  bool isButtonLongPress = false;
   while (true)
   {
     if (needRedraw == true)
@@ -1690,7 +1690,11 @@ void systemMenu()
       {
         if (index == selectIndex)
         {
-          m5lcd.setTextColor(TFT_GREEN);
+          if (isButtonLongPress == true) {
+              m5lcd.setTextColor(TFT_RED);
+            } else {
+              m5lcd.setTextColor(TFT_GREEN);
+            }
         }
         else
         {
@@ -1730,7 +1734,12 @@ void systemMenu()
       needRedraw = false;
     }
     M5.update();
-    
+    if(M5.Btn.pressedFor(1000)){ //長押しになった場合色を変える
+      if( isButtonLongPress == false){
+           isButtonLongPress = true; 
+           needRedraw = true;
+      }
+    }
 
     //if (M5.BtnA.wasReleased())
     //{
@@ -1801,6 +1810,7 @@ void systemMenu()
       m5lcd.fillScreen(TFT_BLACK);
       m5lcd.setCursor(0, 0);
       needRedraw = true;
+      isButtonLongPress = false;
     }else if (M5.Btn.wasReleased()) {
       selectIndex++;
       if (selectIndex >= menuItemCount)

@@ -23,7 +23,7 @@
 #ifdef USE_EXT_LCD
 LGFX m5lcd;
 #else
-M5AtomDisplay m5lcd(320,200);                 // LGFXのインスタンスを作成。
+M5AtomDisplay m5lcd(320,200,30);                 // LGFXのインスタンスを作成。
 #endif
 
 int xorKey = 0x80;

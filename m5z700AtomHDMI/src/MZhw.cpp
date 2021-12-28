@@ -32,6 +32,7 @@ extern "C" {
 
 #include "mzmain.h"
 #include "mzscrn.h"
+#include "mz700lgfx.h"
 
 //#include "mzbeep.h"
 
@@ -71,16 +72,49 @@ UINT8 keyports[10] ={ 0,0,0,0,0, 0,0,0,0,0 };
 // MZTフォーマット展開用
 UINT32 *mzt_buf;
 
-
 unsigned int pwmTable[256][3];
 unsigned int mzt_leader1[450];
 unsigned int mzt_leader2[437];
+
+UINT32 tapeData = 0;
+int preTword = 0;
+int readTword = 0;
+int bufStartTword = 0;
+UINT32 tapeDataBuf[400];//読み込み用バッファ
+char tapeDataSaveBuf[1600];//書き込み込み用バッファ
+
+int tapeReadBufCount = 0;
+
+void flushTapeBuf(File fp){
+	if(tapeReadBufCount > 0){
+		fp.write((byte*)tapeDataSaveBuf,tapeReadBufCount);
+		tapeReadBufCount = 0;
+	}
+}
+
+void writeUINT32(File fp,UINT32 data){
+//   byte buf[4];
+//   buf[0] = data & 255;
+//   buf[1] = (data >> 8)  & 255;
+//   buf[2] = (data >> 16) & 255;
+//   buf[3] = (data >> 24) & 255;
+//   fp.write(buf,4);
+	tapeDataSaveBuf[tapeReadBufCount++] = data & 255;;
+	tapeDataSaveBuf[tapeReadBufCount++] = (data >> 8)  & 255;
+	tapeDataSaveBuf[tapeReadBufCount++] = (data >> 16) & 255;
+	tapeDataSaveBuf[tapeReadBufCount++] = (data >> 24) & 255;
+	if(tapeReadBufCount >=1600){
+		flushTapeBuf(fp);
+		m5lcd.print("*");
+	}
+}
 
 // MZTデータの読み込み
 int set_mztData(String mztFile)
 {
 	Serial.println("setMZTStart");
-  Serial.println(mztFile);
+	m5lcd.printf("\n[");
+    Serial.println(mztFile);
 	//FILE *fd;
 	unsigned char tmp_buf[128];
 	int bsize, bb, mzt_buf_tmp;
@@ -92,17 +126,19 @@ int set_mztData(String mztFile)
   Serial.println(filePath);
   
   File fd = SPIFFS.open(filePath, FILE_READ);
+  File tmpTapeData = SPIFFS.open("/tmpTapeData", FILE_WRITE);
+  tapeReadBufCount = 0;
   Serial.println("fileOpen");
 	if(fd == NULL)
 	{
 		// MZTファイルが開けなかった時はイジェクト
 		ts700.mzt_settape = 0;
 		sysst.tape = 0;
-   delay(100);
-    Serial.print("can't open:");
-    Serial.println(filePath);
-    delay(100);
-    fd.close();
+        delay(100);
+        Serial.print("can't open:");
+        Serial.println(filePath);
+        delay(100);
+        fd.close();
 		return false;
 	}
 
@@ -112,29 +148,36 @@ int set_mztData(String mztFile)
 		// ヘッダ
 		for(int i = 0; i < 450; i++)
 		{
-			mzt_buf[mzt_buf_tmp++] = mzt_leader1[i];
+			//mzt_buf[mzt_buf_tmp++] = mzt_leader1[i];
+			mzt_buf_tmp++;
+			writeUINT32(tmpTapeData,mzt_leader1[i]);
 		}
 		// 読み込み
-   int offset = 0;
-    while(fd.available()&&offset < 128){
-      tmp_buf[offset] = fd.read();
-      offset++;
-    }
-    delay(100);
-    if(offset < 128){
-      break;
-    }
-		
+   		int offset = 0;
+    	while(fd.available()&&offset < 128){
+      		tmp_buf[offset] = fd.read();
+      		offset++;
+    	}
+    	delay(100);
+    	if(offset < 128){
+      		break;
+    	}
 		// PWMへの変換とチェックサム
 		sum = 0;
 		for(int i = 0; i < 128; i++)
 		{
-			mzt_buf[mzt_buf_tmp++] = pwmTable[tmp_buf[i]][1];
+			//mzt_buf[mzt_buf_tmp++] = pwmTable[tmp_buf[i]][1];
+			mzt_buf_tmp++;
+			writeUINT32(tmpTapeData,pwmTable[tmp_buf[i]][1]);
 			sum += pwmTable[tmp_buf[i]][2];
 		}
 		//printf("sum=%X, pos=%d\n",sum,mzt_buf_tmp);
-		mzt_buf[mzt_buf_tmp++] = pwmTable[(sum >> 8) & 0xff][1];
-		mzt_buf[mzt_buf_tmp++] = pwmTable[sum & 0xff][1];
+		//mzt_buf[mzt_buf_tmp++] = pwmTable[(sum >> 8) & 0xff][1];
+		mzt_buf_tmp++;
+		writeUINT32(tmpTapeData,pwmTable[(sum >> 8) & 0xff][1]);
+		mzt_buf_tmp++;
+		writeUINT32(tmpTapeData,pwmTable[sum & 0xff][1]);
+		//mzt_buf[mzt_buf_tmp++] = pwmTable[sum & 0xff][1];
 /*		mzt_buf[mzt_buf_tmp++] = 0xD5555540;
 		mzt_buf[mzt_buf_tmp++] = 0xAAAAAAA0;
 		mzt_buf[mzt_buf_tmp++] = 0x55555540;
@@ -164,25 +207,42 @@ int set_mztData(String mztFile)
 		printf("sum=%X, pos=%d\n",sum,mzt_buf_tmp);
 		mzt_buf[mzt_buf_tmp++] = pwmTable[(sum >> 8) & 0xff][1];
 		mzt_buf[mzt_buf_tmp++] = pwmTable[sum & 0xff][1];*/
-		mzt_buf[mzt_buf_tmp++] = 0xC0000000;
+		mzt_buf_tmp++;
+		writeUINT32(tmpTapeData,0xC0000000);
+
+		//mzt_buf[mzt_buf_tmp++] = 0xC0000000;
 		bsize = tmp_buf[0x12] + (tmp_buf[0x13] << 8);
 
 		// ボディ
+		Serial.printf("WriteBody:%d\n",mzt_buf_tmp,mzt_buf_tmp);
 		for(int i = 0; i < 437; i++)
 		{
-			mzt_buf[mzt_buf_tmp++] = mzt_leader2[i];
+			mzt_buf_tmp++;
+			writeUINT32(tmpTapeData,mzt_leader2[i]);
+			//mzt_buf[mzt_buf_tmp++] = mzt_leader2[i];
 		}
 		// PWMへの変換とチェックサム
 		sum = 0;
 		for(int i = 0; i < bsize; i++)
 		{
 			bb = fd.read();
-			mzt_buf[mzt_buf_tmp++] = pwmTable[bb][1];
+	
+			mzt_buf_tmp++;
+			writeUINT32(tmpTapeData,pwmTable[bb][1]);
+			//mzt_buf[mzt_buf_tmp++] = pwmTable[bb][1];
 			sum += pwmTable[bb][2];
 		}
-		mzt_buf[mzt_buf_tmp++] = pwmTable[(sum >> 8) & 0xff][1];
-		mzt_buf[mzt_buf_tmp++] = pwmTable[sum & 0xff][1];
-		mzt_buf[mzt_buf_tmp++] = 0xC0000000;
+		mzt_buf_tmp++;
+		writeUINT32(tmpTapeData,pwmTable[(sum >> 8) & 0xff][1]);
+		//mzt_buf[mzt_buf_tmp++] = pwmTable[(sum >> 8) & 0xff][1];
+
+		mzt_buf_tmp++;
+		writeUINT32(tmpTapeData,pwmTable[sum & 0xff][1]);
+		//mzt_buf[mzt_buf_tmp++] = pwmTable[sum & 0xff][1];
+		
+		mzt_buf_tmp++;
+		writeUINT32(tmpTapeData,0xC0000000);
+		//mzt_buf[mzt_buf_tmp++] = 0xC0000000;
 	}
 	ts700.mzt_bsize = mzt_buf_tmp;
 	Serial.printf("MZT size:%d\n", ts700.mzt_bsize);
@@ -198,7 +258,18 @@ int set_mztData(String mztFile)
 	}
 	sysst.tape = 0;
 	xferFlag |= SYST_CMT;
+
+	tapeData = 0;
+	preTword = 0;
+	readTword = 0;
+	bufStartTword = 0;
+
 	fd.close();
+
+	flushTapeBuf(tmpTapeData);
+	tmpTapeData.close();
+	m5lcd.println("]");
+
   return true;
 }
 
@@ -681,6 +752,9 @@ void makePWM(void)
 	}
 }
 
+// unsigned long cmtCount = 0;
+// unsigned long preMills = 0;
+
 // SHARP PWMフォーマットにもとづくテープリード信号
 int cmt_read(void)
 {
@@ -705,9 +779,8 @@ int cmt_read(void)
 	//tbit = (elapsed % (27*428)) / 428;
   tword = elapsed / (27 * calcParam);
   tbit = (elapsed % (27 * calcParam)) / calcParam;
+  //Serial.printf("cpu_tstates = %d, mzt_start = %d, mzt_elapsed = %d, elapsed = %d , tword = %d, tbit = %d\n",ts700.cpu_tstates ,ts700.mzt_start, ts700.mzt_elapse ,elapsed, tword, tbit );
 
-  //Serial.printf("%d %d %d %d", elapsed, tword, tbit, (mzt_buf[tword] << tbit) & 0x80000000);
-	
 	// データエンドの先ならゼロを返す
 	if(tword >= ts700.mzt_bsize)
 	{
@@ -717,6 +790,10 @@ int cmt_read(void)
 		ts700.cmt_tstates = 0;
 		sysst.tape =100;
 		setup_cpuspeed(1);
+		tapeData = 0;
+		preTword = 0;
+		readTword = 0;
+		bufStartTword = 0;
 		return 0;
 	}
 	// 進捗表示用
@@ -726,19 +803,35 @@ int cmt_read(void)
 		//Serial.printf("old=%d new=%d\n", sysst.tape, percent);
     //Serial.println();
 		String message = "TAPE READ:" + String(percent) + " %";
-    updateStatusArea(message.c_str());
+        updateStatusArea(message.c_str());
 		sysst.tape = percent;
 		xferFlag |= SYST_CMT;
 	}
 	// データ位置からビットの状態を取り出す
-	if((mzt_buf[tword] << tbit) & 0x80000000)
+	if(preTword != tword){
+		preTword = tword;
+		if(readTword <= tword){
+			bufStartTword = readTword;
+			File tmpTapeData = SPIFFS.open("/tmpTapeData", FILE_READ);
+			tmpTapeData.seek(readTword * 4,SeekSet);
+			//char data[400];
+			int readDataCount = tmpTapeData.readBytes(tapeDataSaveBuf,1600);
+			for(int dataIndex = 0;dataIndex < readDataCount;dataIndex = dataIndex + 4){
+				tapeDataBuf[dataIndex / 4] = tapeDataSaveBuf[dataIndex] | (tapeDataSaveBuf[dataIndex+1] << 8) | (tapeDataSaveBuf[dataIndex+2] << 16) | (tapeDataSaveBuf[dataIndex+3] << 24);
+				//Serial.printf("%d:%x\n",dataIndex / 4,tapeDataBuf[dataIndex / 4]);
+			}
+			tmpTapeData.close();
+			readTword = readTword + readDataCount / 4;
+		}
+		tapeData = tapeDataBuf[tword - bufStartTword];
+	}
+	//if((mzt_buf[tword] << tbit) & 0x80000000)
+	if((tapeData << tbit) & 0x80000000)
 	{
-		//Serial.println("");
 		return 0x20;
 	}
 	else
 	{
-	  //Serial.println("");
 		return 0;
 	}
 }

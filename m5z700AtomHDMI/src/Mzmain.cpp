@@ -84,6 +84,7 @@ bool inputStringMode;
 void sortList(String fileList[], int fileListCount);
 static void keyboard(const uint8_t* d, int len);
 void gui_hid(const uint8_t* hid, int len);  // Parse HID event
+static bool saveMZTImage();
 
 bool joyPadPushed_U;
 bool joyPadPushed_D;
@@ -102,6 +103,7 @@ int xferFlag = 0;
 #define MAX_FILES 255 // this affects memory
 
 String selectMzt();
+bool firstLoadFlag;
 
 int q_kbd;
 typedef struct KBDMSG_t {
@@ -347,7 +349,6 @@ unsigned char hid_to_mz700[] ={
 0xff//232-65535	0xE8-0xFFFF	Reserved
 };
 
-
 unsigned char hid_to_mz80c[] ={
 0xff,//0	0x00	Reserved (no event indicated)
 0xff,//1	0x01	Keyboard ErrorRollOver?
@@ -396,16 +397,16 @@ unsigned char hid_to_mz80c[] ={
 0x91,//44	0x2C	Keyboard Spacebar
 0x05,//45	0x2D	Keyboard - and (underscore)
 0x25,//46	0x2E	Keyboard = and +
-0xff,//47	0x2F	Keyboard [ and {
-0xff,//48	0x30	Keyboard ] and }
+0x95,//47	0x2F	Keyboard [ and {
+0x75,//48	0x30	Keyboard ] and }
 0xff,//49	0x31	Keyboard \ and ｜
 0xff,//50	0x32	Keyboard Non-US # and ~
 0x54,//51	0x33	Keyboard ; and :
 0xff,//52	0x34	Keyboard ' and "
 0xff,//53	0x35	Keyboard Grave Accent and Tilde
-0x64,//54	0x36	Keyboard, and <
+0x73,//54	0x36	Keyboard, and <
 0x64,//55	0x37	Keyboard . and >
-0xff,//56	0x38	Keyboard / and ?
+0x74,//56	0x38	Keyboard / and ?
 0x65,//57	0x39	Keyboard Caps Lock
 0xff,//58	0x3A	Keyboard F1
 0xff,//59	0x3B	Keyboard F2
@@ -591,11 +592,11 @@ int mz_alloc_mem(void)
   /* MZT file Memory */
   //mzt_buf = (UINT32*)ps_malloc(4*64*1024);
   //mzt_buf = (UINT32*)ps_malloc(16 * 64 * 1024);
-  //mzt_buf = (UINT32*)malloc(16 * 64 * 1024);
+  //mzt_buf = (UINT32*)malloc(4 * 64 * 1024);
   //if (mzt_buf == NULL)
   //{
   //    return -1;
-  //  }
+  //}
 
   /* ROM FONT */
   //mz_font = (uint8_t*)ps_malloc(ROMFONT_SIZE);
@@ -631,10 +632,10 @@ void mz_free_mem(void)
     free(mz_font);
   }
 
-  if (mzt_buf)
-  {
-    free(mzt_buf);
-  }
+  //if (mzt_buf)
+  //{
+//    free(mzt_buf);
+//  }
 
   if (junk)
   {
@@ -791,6 +792,8 @@ int mz80c_main()
   keyCheckCount = 0;
   preKeyCode = -1;
   inputStringMode = false;
+
+  firstLoadFlag = true;
 
   Serial.println("Screen init:Start");
   mz_screen_init();
@@ -1403,12 +1406,12 @@ String selectMzt() {
       {
         startIndex = 0;
       }
-      endIndex = startIndex + 24;
+      endIndex = startIndex + 21;
       if (endIndex > fileListCount)
       {
         endIndex = fileListCount;
         //startIndex = endIndex - 12;
-        startIndex = endIndex - 24;
+        startIndex = endIndex - 21;
         if (startIndex < 0) {
           startIndex = 0;
         }
@@ -1421,7 +1424,7 @@ String selectMzt() {
       {
         if (index == selectIndex)
         {
-          if (isButtonLongPress == true && index != 0) {
+          if (isButtonLongPress == true) {
             m5lcd.setTextColor(TFT_RED);
           } else {
             m5lcd.setTextColor(TFT_GREEN);
@@ -1518,15 +1521,33 @@ String selectMzt() {
         //  delay(10);
         //  return fileList[selectIndex - 1];
         //} else {
-          m5lcd.setCursor(0, 0);
-          m5lcd.print("SET MZT TO MEMORY:");
-          m5lcd.print(fileList[selectIndex - 1]);
-          delay(2000);
-          m5lcd.fillScreen(TFT_BLACK);
-          delay(10);
-          //メモリに読み込む
-          setMztToMemory(fileList[selectIndex - 1]);
-          return fileList[selectIndex - 1];
+
+          if(firstLoadFlag == true){
+            firstLoadFlag = false;
+            //起動・またはリセット後の1回目はメモリ読み込み許可
+            m5lcd.setCursor(0, 0);
+            m5lcd.print("SET MZT FILE:");
+            m5lcd.print(fileList[selectIndex - 1]);
+            delay(2000);
+            m5lcd.fillScreen(TFT_BLACK);
+            delay(10);
+            //メモリに読み込む
+            setMztToMemory(fileList[selectIndex - 1]);
+            return fileList[selectIndex - 1];
+          }else{
+            m5lcd.setCursor(0, 0);
+            m5lcd.print("SET MZT TO CMT IMAGE AND START:");
+            m5lcd.print(fileList[selectIndex - 1]);
+            //delay(2000);読み込み遅いのでdelay無くても大丈夫。
+            set_mztData(fileList[selectIndex - 1]);
+            ts700.cmt_play = 1;
+            ts700.mzt_start = ts700.cpu_tstates;
+            ts700.cmt_tstates = 1;
+            setup_cpuspeed(5);
+            sysst.motor = 1; 
+            xferFlag |= SYST_MOTOR;
+            return fileList[selectIndex - 1];
+          }
         //}
       }
     }else if (M5.Btn.wasReleased()){
@@ -1618,25 +1639,124 @@ int setMztToMemory(String mztFile) {
   } else {
     // this is mzt format
     fd.seek(0, SeekSet);
-
     while (remain >= 128) {
       fd.read(header, sizeof(header));
       remain -= 128;
-
+      byte mode =  header[0]; //1:マシン語 2:BASIC
       int size = header[0x12] | (header[0x13] << 8);
       int offs = header[0x14] | (header[0x15] << 8);
       int addr = header[0x16] | (header[0x17] << 8);
 
+      //mode = 1 以外、または、場合、CMTをイメージをセットする。
+      if(mode != 1){
+        fd.close();
+        m5lcd.print("\n[SET TO CMT IMAGE]");
+        set_mztData(mztFile);
+        ts700.cmt_play = 1;
+        
+        //カセットのセットだけして、回転開始はエミュレータ側に任せるほうがいいかどうか…
+        ts700.mzt_start = ts700.cpu_tstates;
+        ts700.cmt_tstates = 1;
+        setup_cpuspeed(5);
+        sysst.motor = 1;
+        xferFlag |= SYST_MOTOR;
+
+        return true;
+      }
+      m5lcd.print("\n[SET TO MEMORY]");
+      delay(500);
+
       Serial.printf("[size:%X][offs:%X][addr:%X]\n", size, offs, addr);
 
       if (remain >= size) {
-        fd.read(mem + offs + RAM_START, size);
+//         if(mode == 2){ //BASICの場合、1バイトずつ処理。SP-5030用 / mode=5 S-BASIC？ワークエリア違ってるから読めないです…。
+//           //http://www43.tok2.com/home/cmpslv/Mz80k/Mzsp5030.htm
+//           WORD address = offs;//0x4806; //BASICプログラムエリア
+//           WORD nextAddress = 0;
+//           uint8_t readBuffer[128];
+//           while(true){
+//             //次のアドレス
+//             fd.read(readBuffer, 2);
+//             remain -= 2;
+//             WORD deltaAddress = readBuffer[0] | (readBuffer[1] << 8);
+//             if(deltaAddress <= 0){
+//               break;
+//             }
+//             nextAddress = address + deltaAddress;
+//             Serial.printf("%x:%x:%x\n" ,address,deltaAddress,nextAddress);
+//             *(mem + RAM_START + address)= ((uint8_t*)&(nextAddress))[0];
+//             *(mem +  RAM_START + address + 1)= ((uint8_t*)&(nextAddress))[1];
+//             fd.read(mem + RAM_START + address + 2, deltaAddress - 2); 
+//             address = nextAddress;
+//             remain -= deltaAddress;
+//           }
+//           *(mem + RAM_START + address) = 0;
+//           *(mem +  RAM_START + address + 1)= 0;
+//           address = address + 2;
+//             //BASICワークエリアを更新
+//             //０４６３４Ｈ－０４６３５Ｈ：ＢＡＳＩＣプログラム最終アドレス
+//             //０４６３６Ｈ－０４６３７Ｈ：２重添字つきストリング変数エリア　ポインタ  (ＢＡＳＩＣプログラム最終アドレス+2バイト)
+//             //０４６３８Ｈ－０４６３９Ｈ：　　添字つきストリング変数エリア　ポインタ  (+2バイト)
+//             //０４６３ＡＨ－０４６３ＢＨ：　　　　　　ストリング変数エリア　ポインタ  (+2バイト)
+//             //０４６３ＥＨ－０４６３ＦＨ：　　　　　　　　　　　配列エリア　ポインタ  (+2バイト)
+//             //０４６４０Ｈ－０４６４１Ｈ：　　　　　　　　　　　変数エリア　ポインタ  (+2バイト)
+//             //０４６４２Ｈ－０４６４３Ｈ：　　　　　　　　　　　ストリング　ポインタ  (+2バイト)
+//             //０４６４４Ｈ－０４６４５Ｈ：　　　　　　　変数へ代入する数値　ポインタ  (+2バイト)
+
+//             for(int workAddress = 0x4634;workAddress<0x4645;workAddress=workAddress + 2){
+//               *(mem + RAM_START + workAddress)= ((uint8_t*)&(address))[0];
+//               *(mem + RAM_START + workAddress + 1)= ((uint8_t*)&(address))[1];
+//   //           Serial.printf("WORK:%x:%x\n" ,workAddress,address);
+//               address = address + 2;
+//           }
+//           //これは必要ないかも？
+//           //*(mem + RAM_START + 0x4801)= 0x5a;
+//           //*(mem + RAM_START + 0x4802)= 0x44;
+
+// /* TEST
+//           for(int testAddress = 0x4634;testAddress < 0x4660;testAddress=testAddress+16){
+//             Serial.printf("%08x  " ,testAddress);
+//             for(int j=0;j<16;j++){
+//               Serial.printf("%02x " ,*(mem + RAM_START + testAddress + j));
+//             }
+//             Serial.println();
+//           }
+// */
+
+//         }else{
+          fd.read(mem + offs + RAM_START, size);
+//        }
       }
       remain -= size;
-      Z80_Regs StartRegs;
-      Z80_GetRegs(&StartRegs);
-      StartRegs.PC.D = addr;
-      Z80_SetRegs(&StartRegs);
+      if(mode == 1){
+        Z80_Regs StartRegs;
+        Z80_GetRegs(&StartRegs);
+        StartRegs.PC.D = addr;
+        Z80_SetRegs(&StartRegs);
+      }
+      // if(mode == 5){ //S-BASICワークエリア
+      //   WORD address = offs + size;
+      //   Serial.printf("address :%x " ,address);
+      //   //WORD workAreaAddress = 0x6B09;
+      //   WORD workAreaAddress =0x6B49; //状況によって場所が異なるかも？
+      //   *(mem + RAM_START + workAreaAddress)= ((uint8_t*)&(address))[0];
+      //   *(mem + RAM_START + workAreaAddress + 1)= ((uint8_t*)&(address))[1];
+      //   address = address + 1;
+      //   *(mem + RAM_START + workAreaAddress + 2)= ((uint8_t*)&(address))[0];
+      //   *(mem + RAM_START + workAreaAddress + 3)= ((uint8_t*)&(address))[1];
+      //   address = address + 0x222;
+      //   *(mem + RAM_START + workAreaAddress + 4)= ((uint8_t*)&(address))[0];
+      //   *(mem + RAM_START + workAreaAddress + 5)= ((uint8_t*)&(address))[1];
+      //   //workAreaAddress = 0x6B57;
+      //   //*(mem + RAM_START + workAreaAddress + 14)= 0xB4;
+      //   for(int testAddress = 0x6B09;testAddress < 0x6B60;testAddress=testAddress+16){
+      //       Serial.printf("%08x  " ,testAddress);
+      //       for(int j=0;j<16;j++){
+      //         Serial.printf("%02x " ,*(mem + RAM_START + testAddress + j));
+      //       }
+      //       Serial.println();
+      //   }
+      // }
     }
   }
 
@@ -1645,10 +1765,9 @@ int setMztToMemory(String mztFile) {
   return true;
 }
 
-#define MENU_ITEM_COUNT 8
-#define PCG_INDEX 5
-#define SOUNT_INDEX 6
-#define LCD_INDEX 8
+#define SET_TO_MEMORY_INDEX 5
+#define SAVE_IMAGE_INDEX 6
+#define PCG_INDEX 7
 void systemMenu()
 {
   static String menuItem[] =
@@ -1658,6 +1777,8 @@ void systemMenu()
     "RESET:NEW MONITOR",
     "RESET:MZ-1Z009",
     "RESET:SP-1002",
+    "SET TO MEMORY",
+    "SAVE MZT Image",
   #ifndef USE_EXT_LCD
     "PCG",
   #endif
@@ -1701,6 +1822,9 @@ void systemMenu()
           m5lcd.setTextColor(TFT_WHITE);
         }
         String curItem = menuItem[index];
+        if( index == SET_TO_MEMORY_INDEX ){
+          curItem = curItem + ((firstLoadFlag == true) ? String(": ON") : String(": OFF"));
+        }
         if (index == PCG_INDEX) {
           curItem = curItem + ((hw700.pcg700_mode == 1) ? String(": ON") : String(": OFF"));
         }
@@ -1773,23 +1897,14 @@ void systemMenu()
         case 4:
           strcpy(mzConfig.romFile, "SP-1002.ROM");
           break;
+        case SET_TO_MEMORY_INDEX:
+          firstLoadFlag = !firstLoadFlag;
+          break;
+        case SAVE_IMAGE_INDEX:
+          saveMZTImage();
+          break;
         case PCG_INDEX:
           hw700.pcg700_mode = (hw700.pcg700_mode == 1) ? 0 : 1;
-          break;
-        case SOUNT_INDEX:
-          mzConfig.enableSound = mzConfig.enableSound ? false : true;
-          break;
-        case 7:
-          inputStringEx = "load";
-          inputStringMode = true;
-          m5lcd.fillScreen(TFT_BLACK);
-          delay(10);
-          return;
-        case LCD_INDEX:
-          ldcMode = ldcMode + 1;
-          if (ldcMode >= 3) {
-            ldcMode = 0;
-          }
           break;
 
         default:
@@ -1805,6 +1920,7 @@ void systemMenu()
         delay(2000);
         monrom_load();
         mz_reset();
+        firstLoadFlag = true;
         return;
       }
       m5lcd.fillScreen(TFT_BLACK);
@@ -1918,3 +2034,76 @@ static void keyboard(const uint8_t* d, int len)
         Serial.printf("mods:%d keyCode:%d\n",mods,key_code);
     }
 }
+
+
+static bool saveMZTImage(){
+  //上書きで保存
+  //MZTファイル形式でメモリを保存する。
+  //・ヘッダ (128 バイト)
+  //0000h モード (01h バイナリ, 02h S-BASIC, C8h CMU-800 データファイル)
+  //0001h ～ 0011h ファイル名 (0Dh で終わり / 0011h = 0Dh?)
+  //0012h ～ 0013h ファイルサイズ
+  //0014h ～ 0015h 読み込むアドレス
+  ///0016h ～ 0017h 実行するアドレス
+  //0018h ～ 007Fh 予約
+  //・データ (可変長)
+  //0080h ～ データがファイルサイズ分続く
+
+  m5lcd.fillScreen(BLACK);
+  m5lcd.setCursor(0,0);
+  m5lcd.println("SAVE MZT IMAGE");
+  File saveFile;
+   if (mzConfig.mzMode == MZMODE_80) {
+      saveFile = SPIFFS.open("/0_M5Z80MEM.MZT", FILE_WRITE);
+  }else{
+      saveFile = SPIFFS.open("/0_M5Z700MEM.MZT", FILE_WRITE);
+  }
+  if(saveFile == false){
+    return false;
+  }
+
+  saveFile.write(0x01);
+  saveFile.write('M');
+  saveFile.write('5');
+  saveFile.write('Z');
+  saveFile.write('M');
+  saveFile.write('E');
+  saveFile.write('M');
+  for(int i = 0;i < 11;i++){
+    saveFile.write(0x0D);
+  }
+  //ファイルサイズ = (0xCFFF-0x1200) = BDFF
+  saveFile.write(0xFF);
+  saveFile.write(0xBD);
+
+  //読み込みアドレス 0x1200
+  saveFile.write(0x00);
+  saveFile.write(0x12);
+  
+  //実行アドレス：現在のPC
+  Z80_Regs regs;
+  Z80_GetRegs(&regs);
+  int addr = regs.PC.D;
+
+  saveFile.write(((uint8_t*)&(addr))[1]);
+  saveFile.write(((uint8_t*)&(addr))[0]);
+  
+  for(int i = 0x18;i <= 0x7f;i++){
+    saveFile.write(0);
+  }
+  BYTE	*mainRamMem = mem + RAM_START;
+  //RAM 1200h～CFFF を保存
+  m5lcd.println();
+  for(int index = 0x1200;index <= 0xCFFF;index++){
+    saveFile.write(*(mainRamMem + index));
+    if(index % 100 == 0){
+      m5lcd.print("*");
+    }
+  }  
+  saveFile.close();
+  m5lcd.println();
+  m5lcd.println("COMPLTE!");
+  delay(2000);
+  return true;
+}
+

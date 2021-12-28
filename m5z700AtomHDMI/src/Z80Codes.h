@@ -148,95 +148,101 @@
 
 #define M_INC(Reg)                                      \
  ++Reg;                                                 \
- R.AF.B.l=(R.AF.B.l&C_FLAG)|ZSTable[Reg]|               \
-          ((Reg==0x80)?V_FLAG:0)|((Reg&0x0F)?0:H_FLAG)
+ R.AF.B.l = (R.AF.B.l & C_FLAG) |                       \
+          ZSTable[Reg] |                                \
+          ((Reg == 0x80) ? V_FLAG : 0) |                \
+          ((Reg & 0x0F) ? 0 : H_FLAG)
 
 #define M_DEC(Reg)                                      \
- R.AF.B.l=(R.AF.B.l&C_FLAG)|N_FLAG|                     \
-          ((Reg==0x80)?V_FLAG:0)|((Reg&0x0F)?0:H_FLAG); \
- R.AF.B.l|=ZSTable[--Reg]
+ --Reg;                                                 \
+ R.AF.B.l = (R.AF.B.l & C_FLAG) |                       \
+          N_FLAG |                                      \
+          ((Reg == 0x80) ? V_FLAG : 0) |                \
+          ((Reg & 0x0F) ? 0 : H_FLAG);                  \
+ R.AF.B.l |= ZSTable[Reg]
+
+// A = B + C とすると, (C ^ B の MSB == 0) かつ (C ^ A の MSB == 1) の場合, オーバーフローです
+// A = B - C とすると, (C ^ B の MSB == 1) かつ (C ^ A の MSB == 0) の場合, オーバーフローです
 
 #define M_ADD(Reg)                                      \
 {                                                       \
- int q;                                                 \
- q=R.AF.B.h+Reg;                                        \
- R.AF.B.l=ZSTable[q&255]|((q&256)>>8)|                  \
-          ((R.AF.B.h^q^Reg)&H_FLAG)|                    \
-          (((Reg^R.AF.B.h^0x80)&(Reg^q)&0x80)>>5);      \
- R.AF.B.h=q;                                            \
+ int q = R.AF.B.h + Reg;                                \
+ R.AF.B.l = ZSTable[q & 255] | ((q & 256) >> 8)|        \
+          ((R.AF.B.h ^ q ^ Reg) & H_FLAG) |             \
+          (((Reg ^ R.AF.B.h ^ 0x80) & (Reg ^ q) & 0x80) >> 5);\
+ R.AF.B.h = q;                                          \
 }
 
 #define M_ADC(Reg)                                      \
 {                                                       \
- int q;                                                 \
- q=R.AF.B.h+Reg+(R.AF.B.l&1);                           \
- R.AF.B.l=ZSTable[q&255]|((q&256)>>8)|                  \
-          ((R.AF.B.h^q^Reg)&H_FLAG)|                    \
-          (((Reg^R.AF.B.h^0x80)&(Reg^q)&0x80)>>5);      \
- R.AF.B.h=q;                                            \
+ int r = Reg + (R.AF.B.l & C_FLAG);                     \
+ int q = R.AF.B.h + r;                                  \
+ R.AF.B.l = ZSTable[q & 255] | ((q & 256)>>8) |         \
+          ((R.AF.B.h ^ q ^ r) & H_FLAG) |               \
+          (((r ^ R.AF.B.h ^ 0x80) & (r^q) & 0x80) >> 5);\
+ R.AF.B.h = q;                                          \
 }
 
 #define M_SUB(Reg)                                      \
 {                                                       \
- int q;                                                 \
- q=R.AF.B.h-Reg;                                        \
- R.AF.B.l=ZSTable[q&255]|((q&256)>>8)|N_FLAG|           \
-          ((R.AF.B.h^q^Reg)&H_FLAG)|                    \
-          (((Reg^R.AF.B.h)&(Reg^q)&0x80)>>5);           \
- R.AF.B.h=q;                                            \
+ int q = R.AF.B.h - Reg;                                \
+ R.AF.B.l = ZSTable[q & 255] |                 /* Z,S */\
+          ((q & 256) >> 8) |                   /* C   */\
+          N_FLAG |                             /* N   */\
+          ((R.AF.B.h ^ q ^ Reg) & H_FLAG)|     /* H   */\
+          (((Reg ^ R.AF.B.h) & (Reg ^ q ^ 0x80) & 0x80) >> 5);/* V */\
+ R.AF.B.h = q;                                          \
 }
 
 #define M_SBC(Reg)                                      \
 {                                                       \
- int q;                                                 \
- q=R.AF.B.h-Reg-(R.AF.B.l&1);                           \
- R.AF.B.l=ZSTable[q&255]|((q&256)>>8)|N_FLAG|           \
-          ((R.AF.B.h^q^Reg)&H_FLAG)|                    \
-          (((Reg^R.AF.B.h)&(Reg^q)&0x80)>>5);           \
- R.AF.B.h=q;                                            \
+ int r = Reg + (R.AF.B.l & C_FLAG);                     \
+ int q = R.AF.B.h - r;                                  \
+ R.AF.B.l = ZSTable[q & 255] | ((q & 256) >> 8) | N_FLAG |\
+          ((R.AF.B.h ^ q ^ r) & H_FLAG) |               \
+          (((r ^ R.AF.B.h) & (r ^ q ^ 0x80) & 0x80) >> 5);\
+ R.AF.B.h = q;                                          \
 }
 
 #define M_CP(Reg)                                       \
 {                                                       \
- int q;                                                 \
- q=R.AF.B.h-Reg;                                        \
- R.AF.B.l=ZSTable[q&255]|((q&256)>>8)|N_FLAG|           \
-          ((R.AF.B.h^q^Reg)&H_FLAG)|                    \
-          (((Reg^R.AF.B.h)&(Reg^q)&0x80)>>5);           \
+ int q = R.AF.B.h - Reg;                                \
+ R.AF.B.l = ZSTable[q & 255] | ((q & 256)>>8) | N_FLAG |\
+          ((R.AF.B.h ^ q ^ Reg) & H_FLAG) |             \
+          (((Reg ^ R.AF.B.h) & (Reg ^ q ^ 0x80) & 0x80) >> 5);\
 }
 
-#define M_ADDW(Reg1,Reg2)                              \
-{                                                      \
- int q;                                                \
- q=R.Reg1.D+R.Reg2.D;                                  \
- R.AF.B.l=(R.AF.B.l&(S_FLAG|Z_FLAG|V_FLAG))|           \
-          (((R.Reg1.D^q^R.Reg2.D)&0x1000)>>8)|         \
-          ((q>>16)&1);                                 \
- R.Reg1.W.l=q;                                         \
+#define M_ADDW(Reg1, Reg2)                              \
+{                                                       \
+ int q = R.Reg1.D + R.Reg2.D;                           \
+ R.AF.B.l = (R.AF.B.l & (S_FLAG | Z_FLAG | V_FLAG)) |   \
+          (((R.Reg1.D ^ q ^ R.Reg2.D) & 0x1000) >> 8) | \
+          ((q >> 16) & 1);                              \
+ R.Reg1.W.l = q;                                        \
 }
 
-#define M_ADCW(Reg)                                            \
-{                                                              \
- int q;                                                        \
- q=R.HL.D+R.Reg.D+(R.AF.D&1);                                  \
- R.AF.B.l=(((R.HL.D^q^R.Reg.D)&0x1000)>>8)|                    \
-          ((q>>16)&1)|                                         \
-          ((q&0x8000)>>8)|                                     \
-          ((q&65535)?0:Z_FLAG)|                                \
-          (((R.Reg.D^R.HL.D^0x8000)&(R.Reg.D^q)&0x8000)>>13);  \
- R.HL.W.l=q;                                                   \
+#define M_ADCW(Reg)                                     \
+{                                                       \
+ int r = R.Reg.D + (R.AF.D & C_FLAG);                   \
+ int q = R.HL.D + r;                                    \
+ R.AF.B.l = (((R.HL.D ^ q ^ r) & 0x1000) >> 8) |        \
+            ((q >> 16) & 1) |                           \
+            ((q & 0x8000) >> 8) |                       \
+            ((q & 65535) ? 0 : Z_FLAG) |                \
+            (((r ^ R.HL.D ^ 0x8000) & (r ^ q) & 0x8000) >> 13);\
+ R.HL.W.l = q;                                          \
 }
 
-#define M_SBCW(Reg)                                    \
-{                                                      \
- int q;                                                \
- q=R.HL.D-R.Reg.D-(R.AF.D&1);                          \
- R.AF.B.l=(((R.HL.D^q^R.Reg.D)&0x1000)>>8)|            \
-          ((q>>16)&1)|                                 \
-          ((q&0x8000)>>8)|                             \
-          ((q&65535)?0:Z_FLAG)|                        \
-          (((R.Reg.D^R.HL.D)&(R.Reg.D^q)&0x8000)>>13)| \
-          N_FLAG;                                      \
- R.HL.W.l=q;                                           \
+#define M_SBCW(Reg)                                     \
+{                                                       \
+ int r = R.Reg.D + (R.AF.D & C_FLAG);                   \
+ int q = R.HL.D - r;                                    \
+ R.AF.B.l = (((R.HL.D ^ q ^ r) & 0x1000) >> 8) |        \
+            ((q >> 16) & 1) |                           \
+            ((q & 0x8000) >> 8) |                       \
+            ((q & 65535) ? 0 : Z_FLAG) |                \
+            (((r ^ R.HL.D) & (r ^ q ^ 0x8000) & 0x8000)>>13) |\
+            N_FLAG;                                     \
+ R.HL.W.l = q;                                          \
 }
 

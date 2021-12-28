@@ -267,14 +267,14 @@ void update_scrn_thread(void *pvParameters)
         #ifdef USE_EXT_LCD
           m5lcd.setTextColor(TFT_WHITE);
           m5lcd.setTextSize(1);
-          m5lcd.fillRect(0, 180, 240, 20, TFT_BLACK);
-          m5lcd.setCursor(0, 180);
+          m5lcd.fillRect(0, 190, 240, 90, TFT_BLACK);
+          m5lcd.setCursor(0, 190);
           m5lcd.print(statusAreaMessage);
         #else
           m5lcd.setTextColor(TFT_WHITE);
           m5lcd.setTextSize(1);
-          m5lcd.fillRect(0, 180, 320, 20, TFT_BLACK);
-          m5lcd.setCursor(0, 180);
+          m5lcd.fillRect(0, 190, 320, 10, TFT_BLACK);
+          m5lcd.setCursor(0, 190);
           m5lcd.print(statusAreaMessage);
         #endif
       }

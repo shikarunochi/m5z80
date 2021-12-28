@@ -173,7 +173,6 @@ extern UINT32 	*mzt_buf;
 extern UINT8 *mz_font;//[256][8][8];										// 256chars*8lines*8dots
 extern UINT8 *pcg700_font;//[256][8][8];								/* PCG-700 font (2K) */
 
-// テスト用MZTデータ
 extern int mzt_size;
 extern int pwmTable[256][3];
 extern int mzt_leader[80];

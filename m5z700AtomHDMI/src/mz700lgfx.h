@@ -1,8 +1,14 @@
 #ifndef MZ700LGX_H_
 #define MZ700LGX_H_
 
+#if defined(_M5STICKCPLUS)
+#include <M5GFX.h>
+#include <M5StickCPlus.h>
+#else
+#include <M5Atom.h>  
 #define LGFX_M5STACK     
-#include <M5Atom.h>
+#endif
+
 
 #ifdef USE_EXT_LCD
 #include <M5GFX.h>
@@ -42,7 +48,7 @@ class LGFX : public lgfx::LGFX_Device
         // ※ 以下の設定値はパネル毎に一般的な初期値が設定されていますので、不明な項目はコメントアウトして試してみてください。
 
         cfg.memory_width     =   240;  // ドライバICがサポートしている最大の幅
-        cfg.memory_height    =   240;  // ドライバICがサポートしている最大の高さ
+        cfg.memory_height    =   320;  // ドライバICがサポートしている最大の高さ
         cfg.panel_width      =   240;  // 実際に表示可能な幅
         cfg.panel_height     =   240;  // 実際に表示可能な高さ
         cfg.offset_x         =     0;  // パネルのX方向オフセット量
@@ -64,9 +70,15 @@ class LGFX : public lgfx::LGFX_Device
 extern LGFX m5lcd;
 
 #else
+#if defined(_M5STICKCPLUS)
+extern M5GFX  m5lcd;
+#else
+
 #include <M5AtomDisplay.h>
 extern M5AtomDisplay m5lcd; 
 #endif
+#endif
 
-extern int ldcMode;
+extern int lcdMode;
+extern int lcdRotate;
 #endif 

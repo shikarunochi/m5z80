@@ -7,7 +7,13 @@
 // mz80rpi by Nibble Lab./Oh!Ishi, based on MZ700WIN
 // (c) Nibbles Lab./Oh!Ishi 2017
 //----------------------------------------------------------------------------
-#include <M5Atom.h>
+#if defined(_M5STICKCPLUS)
+#include <M5GFX.h>
+#include <M5StickCPlus.h>
+#else
+#include <M5Atom.h>  
+#endif
+
 #include "FS.h"
 #include <SPIFFS.h>
 #include <time.h>
@@ -42,8 +48,11 @@ uint16_t c_bright;
 #ifdef USE_EXT_LCD
 #include "mzfont6x8.h"
 LGFX_Sprite canvas(&m5lcd);
+#endif
 
-
+#if defined(_M5STICKCPLUS)
+#include "mzfont6x8.h"
+M5Canvas canvas(&m5lcd);
 #endif
 
 
@@ -54,7 +63,8 @@ int fgColorIndex = 0;
 int bgColorIndex = 0;
 int MZ700_COLOR[] = {BLACK, BLUE, RED, MAGENTA, GREEN, CYAN, YELLOW, WHITE};
 
-int ldcMode = 0;
+int lcdMode = 0;
+int lcdRotate = 0;
 
 boolean needScreenUpdateFlag;
 boolean screnUpdateValidFlag;
@@ -72,6 +82,12 @@ int mz_screen_init(void)
   screnUpdateValidFlag = false;
 
   #ifdef USE_EXT_LCD
+  canvas.setColorDepth(8);
+  canvas.setTextSize(1);
+  canvas.createSprite(40,240); //メモリ足りないので縦40ドット（=5行）に分割して5回に分けて描画する。8x6フォントを90度横向きで描画した後、90度回転させてpushする。
+  #endif
+  #if defined(_M5STICKCPLUS)
+  m5lcd.setRotation(1);
   canvas.setColorDepth(8);
   canvas.setTextSize(1);
   canvas.createSprite(40,240); //メモリ足りないので縦40ドット（=5行）に分割して5回に分けて描画する。8x6フォントを90度横向きで描画した後、90度回転させてpushする。
@@ -100,6 +116,10 @@ void set_scren_update_valid_flag(boolean flag){
 */
 int font_load(const char *fontfile)
 {
+  #if defined (USE_EXT_LCD)||defined(_M5STICKCPLUS)
+    Serial.println("USE INTERNAL FONT DATA");
+    return 0;
+  #endif
   FILE *fdfont;
   int dcode, line, bit;
   UINT8 lineData;
@@ -199,7 +219,7 @@ void update_scrn_thread(void *pvParameters)
       bgColor = 0;
       fgColorIndex = 0;
       bgColorIndex = 0;
-      #ifdef USE_EXT_LCD
+      #if defined (USE_EXT_LCD)||defined(_M5STICKCPLUS)
       int drawIndex = 0;
       #endif
       for (int cy = 0; cy < 25; cy++) {
@@ -235,7 +255,7 @@ void update_scrn_thread(void *pvParameters)
             bgColor = c_dark;
           }
           //fb.drawBitmap(cx * 8, cy * 8, (const uint8_t *)((hw700.pcg700_mode == 0) ? mz_font[ch * 8] : pcg700_font[ch * 8]), 8, 8, fgColor);
-          #ifdef USE_EXT_LCD
+          #if defined (USE_EXT_LCD)||defined(_M5STICKCPLUS)
            canvas.fillRect((cy * 8) % 40, cx * 6, 8, 6, bgColor);
            fontPtr = &mz_font_6x8[(ch + fontOffset) * 6]; 
           #else
@@ -250,15 +270,26 @@ void update_scrn_thread(void *pvParameters)
             }
           }
           #endif
-          #ifdef USE_EXT_LCD
+          #if defined (USE_EXT_LCD)||defined(_M5STICKCPLUS)
             canvas.drawBitmap((cy * 8) % 40, cx * 6, fontPtr, 8, 6, fgColor);
           #else
-            m5lcd.drawBitmap(cx * 8, cy * 8, fontPtr, 8, 8, fgColor);
+           m5lcd.drawBitmap(cx * 8, cy * 8, fontPtr, 8, 8, fgColor);
           #endif
         }
-        #ifdef USE_EXT_LCD
+        #if defined (USE_EXT_LCD)
         if((cy+1)%5 == 0){
-          canvas.pushRotateZoom(120, 40 * drawIndex + 20,90,1,-1); 
+          if(lcdRotate == 0){
+            canvas.pushRotateZoom(120, 40 * drawIndex + 20,90,1,-1); 
+          }else{
+            //canvas.pushRotateZoomWithAA(120, (40 * drawIndex + 40)*0.85,90,0.85,-1); //表示位置の 微調整は、各自のLCDに合わせてください
+            canvas.pushRotateZoom(120, 40 * drawIndex + 20,90,1,-1); 
+          }
+          drawIndex = drawIndex + 1;
+        }
+        #elif defined(_M5STICKCPLUS)
+        if((cy+1)%5 == 0){
+          //6x8ドットフォント使用＆縦方向70%縮小
+          canvas.pushRotateZoomWithAA(120, (40 * drawIndex + 20)*0.7,90,0.7,-1); 
           drawIndex = drawIndex + 1;
         }
         #endif
@@ -269,6 +300,12 @@ void update_scrn_thread(void *pvParameters)
           m5lcd.setTextSize(1);
           m5lcd.fillRect(0, 190, 240, 90, TFT_BLACK);
           m5lcd.setCursor(0, 190);
+          m5lcd.print(statusAreaMessage);
+        #elif defined(_M5STICKCPLUS)
+          m5lcd.setTextColor(TFT_WHITE);
+          m5lcd.setTextSize(1);
+          m5lcd.fillRect(0, 122, 240, 10, TFT_BLACK);
+          m5lcd.setCursor(0, 122);
           m5lcd.print(statusAreaMessage);
         #else
           m5lcd.setTextColor(TFT_WHITE);

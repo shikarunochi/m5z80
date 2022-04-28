@@ -10,8 +10,13 @@
 // 'mz700win' by Takeshi Maruyama, based on Russell Marks's 'mz700em'.
 // Z80 emulation from 'Z80em' Copyright (C) Marcel de Kogel 1996,1997
 //----------------------------------------------------------------------------
+#if defined(_M5STICKCPLUS)
+#include <M5GFX.h>
+#include <M5StickCPlus.h>
+#else
+#include <M5Atom.h>  
+#endif
 
-#include <M5Atom.h>
 #include "FS.h"
 #include <SPIFFS.h>
  
@@ -112,9 +117,11 @@ typedef struct KBDMSG_t {
   unsigned char msg[80];
 } KBDMSG;
 
+#ifndef _M5STICKCPLUS
 CRGB dispColor(uint8_t g, uint8_t r, uint8_t b) {
   return (CRGB)((g << 16) | (r << 8) | b);
 }
+#endif
 
 //MZ-80K/C キーマトリクス参考：http://www43.tok2.com/home/cmpslv/Mz80k/EnrMzk.htm
 unsigned char ak_tbl_80c[] =
@@ -600,6 +607,8 @@ int mz_alloc_mem(void)
 
   /* ROM FONT */
   //mz_font = (uint8_t*)ps_malloc(ROMFONT_SIZE);
+  #if defined (USE_EXT_LCD)||defined(_M5STICKCPLUS)
+  #else
   mz_font = (uint8_t*)malloc(ROMFONT_SIZE);
   if (mz_font == NULL)
   {
@@ -613,6 +622,7 @@ int mz_alloc_mem(void)
   {
     result = -1;
   }
+  #endif
 
   return result;
 }
@@ -699,7 +709,6 @@ void monrom_load(void)
     hid_to_emu = hid_to_mz700;
     shift_code = SHIFT_KEY_700;
   }
-
 }
 
 int set_mztype(void) {
@@ -757,17 +766,22 @@ int mz80c_main()
 
   Serial.println("M5Z-700 START");
   m5lcd.println("M5Z-700 START");
-
-  hid_init("emu32"); 
-  m5lcd.println("HID START");
-  btKeyboardConnect = false;
-  M5.dis.drawpix(0, dispColor(50,0,0));
   
-  #ifdef USE_SPEAKER
+  hid_init("emu32"); 
+  m5lcd.println("HID START"); 
+
+  btKeyboardConnect = false;
+
+  #ifndef _M5STICKCPLUS
+  M5.dis.drawpix(0, dispColor(50,0,0));
+  #endif
+  #if defined(USE_SPEAKER_G26)
   m5lcd.println("SPEAKER: ENABLE[G26]");
   m5lcd.println("CardKB: DISABLE");
-  #else
-  m5lcd.println("SPEAKER: DISABLE");
+  #elif defined(USE_SPEAKER_G25)
+  m5lcd.println("SPEAKER: ENABLE[G25]");
+  #elif defined(_M5STICKCPLUS)
+  m5lcd.println("SPEAKER: ENABLE");
   m5lcd.println("CardKB: ENABLE");
   #endif
 
@@ -866,8 +880,8 @@ void mainloop(void)
 
     scrn_draw(); 
 
-#ifndef USE_SPEAKER
-    //スピーカーピンが G26使うためGROVE WIRE と排他
+#ifndef USE_SPEAKER_G26
+    //M5Atomでスピーカーピンに G26使った場合、GROVE WIRE と排他
     keyCheck();
 #endif
 
@@ -878,7 +892,9 @@ void mainloop(void)
       if(btKeyboardConnect == false){
         btKeyboardConnect = true;
         //接続したらLEDを緑に。
+        #ifndef _M5STICKCPLUS
         M5.dis.drawpix(0, dispColor(0,50,0));
+        #endif
         updateStatusArea("");
       }
     }
@@ -906,7 +922,11 @@ void mainloop(void)
     //    Serial.println("TAPE CAN'T START");
     //  }
     //}
+    #if defined(_M5STICKCPLUS)
+    if (M5.BtnB.wasReleased()) {
+    #else
     if (M5.Btn.wasReleasefor(1000)) {
+    #endif
       //メニュー表示
       set_scren_update_valid_flag(false);
       suspendScrnThreadFlag = true;
@@ -916,7 +936,11 @@ void mainloop(void)
       m5lcd.fillScreen(TFT_BLACK);
       suspendScrnThreadFlag = false;
       set_scren_update_valid_flag(true);
+    #if defined(_M5STICKCPLUS)
+    }else if (M5.BtnA.wasReleased()) {
+    #else
     }else if (M5.Btn.wasReleased()) {
+    #endif
       set_scren_update_valid_flag(false);
       suspendScrnThreadFlag = true;
       delay(100);
@@ -1328,7 +1352,7 @@ int checkI2cKeyboard() {
 }
 
 String selectMzt() {
-  #ifdef USE_SPEAKER
+	#if defined(USE_SPEAKER_G25)||defined(USE_SPEAKER_G26)||defined(M5StickCPlus)
     ledcWriteTone(LEDC_CHANNEL_0, 0); // stop the tone playing:
 	#endif	
   File fileRoot;
@@ -1396,6 +1420,11 @@ String selectMzt() {
   int preStartIndex = 0;
   bool isLongPress = false;
   bool isButtonLongPress = false;
+  #if defined(_M5STICKCPLUS)
+  int dispfileCount = 12;
+  #else
+  int dispfileCount = 21;
+  #endif
   while (true)
   {
     if (needRedraw == true)
@@ -1406,12 +1435,12 @@ String selectMzt() {
       {
         startIndex = 0;
       }
-      endIndex = startIndex + 21;
+      endIndex = startIndex + dispfileCount;
       if (endIndex > fileListCount)
       {
         endIndex = fileListCount;
         //startIndex = endIndex - 12;
-        startIndex = endIndex - 21;
+        startIndex = endIndex - dispfileCount;
         if (startIndex < 0) {
           startIndex = 0;
         }
@@ -1452,7 +1481,11 @@ String selectMzt() {
       m5lcd.drawRect(220, 240 - 19, 100, 18, TFT_WHITE);
       m5lcd.drawCentreString("DOWN", 266, 240 - 17, 1);
 */
+  #if defined(_M5STICKCPLUS)
+      m5lcd.drawString("LONG PRESS:SELECT", 0, 135 - 17, 1);
+  #else
       m5lcd.drawString("LONG PRESS:SELECT", 0, 200 - 17, 1);
+  #endif
       needRedraw = false;
     }
     M5.update();
@@ -1486,13 +1519,21 @@ String selectMzt() {
     //    needRedraw = true;
     //  }
     //}
+    #if defined(_M5STICKCPLUS)
+    if(M5.BtnA.pressedFor(1000)){ //長押しになった場合色を変える
+    #else
     if(M5.Btn.pressedFor(1000)){ //長押しになった場合色を変える
+    #endif
       if( isButtonLongPress == false){
              isButtonLongPress = true; 
             needRedraw = true;
       }
     }
+    #if defined(_M5STICKCPLUS)
+    if (M5.BtnA.wasReleasefor(1000))
+    #else
     if (M5.Btn.wasReleasefor(1000))
+    #endif
     {
       if (selectIndex == 0)
       {
@@ -1550,13 +1591,27 @@ String selectMzt() {
           }
         //}
       }
+    #if defined(_M5STICKCPLUS)
+    }else if (M5.BtnA.wasReleased()){
+    #else
     }else if (M5.Btn.wasReleased()){
+    #endif
       selectIndex++;
       if (selectIndex > fileListCount)
       {
         selectIndex = 0;
       }
       needRedraw = true;
+    #if defined(_M5STICKCPLUS)
+    }else if (M5.BtnB.wasReleased()){
+      selectIndex--;
+      if (selectIndex < 0)
+      {
+        selectIndex = fileListCount-1;
+      }
+      needRedraw = true;
+    #endif
+
     }
     delay(100);
   }
@@ -1767,7 +1822,8 @@ int setMztToMemory(String mztFile) {
 
 #define SET_TO_MEMORY_INDEX 5
 #define SAVE_IMAGE_INDEX 6
-#define PCG_INDEX 7
+#define PCG_OR_ROTATE_LCD_INDEX 7
+
 void systemMenu()
 {
   static String menuItem[] =
@@ -1777,14 +1833,17 @@ void systemMenu()
     "RESET:NEW MONITOR",
     "RESET:MZ-1Z009",
     "RESET:SP-1002",
-    "SET TO MEMORY",
+    "SET MZT TO MEMORY",
     "SAVE MZT Image",
-  #ifndef USE_EXT_LCD
+  #if defined (USE_EXT_LCD)
+    "Rotate LCD",
+  #elif defined(_M5STICKCPLUS)
+  #else
     "PCG",
   #endif
     ""
   };
-	#ifdef USE_SPEAKER
+	#if defined(USE_SPEAKER_G25)||defined(USE_SPEAKER_G26)||defined(M5StickCPlus)
     ledcWriteTone(LEDC_CHANNEL_0, 0); // stop the tone playing:
 	#endif	
   delay(10);
@@ -1825,17 +1884,20 @@ void systemMenu()
         if( index == SET_TO_MEMORY_INDEX ){
           curItem = curItem + ((firstLoadFlag == true) ? String(": ON") : String(": OFF"));
         }
-        if (index == PCG_INDEX) {
+        if (index == PCG_OR_ROTATE_LCD_INDEX) {
+        #if defined (USE_EXT_LCD)
+        #else
           curItem = curItem + ((hw700.pcg700_mode == 1) ? String(": ON") : String(": OFF"));
+        #endif
         }
 /*
         if (index == SOUNT_INDEX) {
           curItem = curItem + (mzConfig.enableSound ? String(": ON") : String(": OFF"));
         }
         if (index == LCD_INDEX) {
-          if (ldcMode == 0) {
+          if (lcdMode == 0) {
             curItem = curItem + ":INTERNAL";
-          } else if (ldcMode == 1) {
+          } else if (lcdMode == 1) {
             curItem = curItem + ":EXTERNAL with AA";
           } else {
             curItem = curItem + ":EXTERNAL without AA";
@@ -1858,7 +1920,11 @@ void systemMenu()
       needRedraw = false;
     }
     M5.update();
+  #if defined(_M5STICKCPLUS)
+    if(M5.BtnA.pressedFor(1000)){ //長押しになった場合色を変える
+  #else
     if(M5.Btn.pressedFor(1000)){ //長押しになった場合色を変える
+  #endif
       if( isButtonLongPress == false){
            isButtonLongPress = true; 
            needRedraw = true;
@@ -1874,8 +1940,11 @@ void systemMenu()
     //  }
     //  needRedraw = true;
     //}
-
+  #if defined(_M5STICKCPLUS)
+    if (M5.BtnA.wasReleasefor(1000))
+  #else
     if (M5.Btn.wasReleasefor(1000))
+  #endif
     {
       if (selectIndex == 0)
       {
@@ -1903,8 +1972,18 @@ void systemMenu()
         case SAVE_IMAGE_INDEX:
           saveMZTImage();
           break;
-        case PCG_INDEX:
+        case PCG_OR_ROTATE_LCD_INDEX:
+        #if defined (USE_EXT_LCD)
+          if(lcdRotate == 0){
+            lcdRotate = 1;
+            m5lcd.setRotation(3);
+          }else{
+            lcdRotate = 0;
+            m5lcd.setRotation(0);
+          }
+        #else
           hw700.pcg700_mode = (hw700.pcg700_mode == 1) ? 0 : 1;
+        #endif
           break;
 
         default:
@@ -1927,7 +2006,11 @@ void systemMenu()
       m5lcd.setCursor(0, 0);
       needRedraw = true;
       isButtonLongPress = false;
+    #if defined(_M5STICKCPLUS)
+    }else if (M5.BtnA.wasReleased()) {
+    #else
     }else if (M5.Btn.wasReleased()) {
+    #endif
       selectIndex++;
       if (selectIndex >= menuItemCount)
       {

@@ -10,8 +10,13 @@
 // 'mz700win' by Takeshi Maruyama, based on Russell Marks's 'mz700em'.
 // Z80 emulation from 'Z80em' Copyright (C) Marcel de Kogel 1996,1997
 //----------------------------------------------------------------------------
-
+#if defined(_M5STICKCPLUS)
+#include <M5GFX.h>
+#include <M5StickCPlus.h>
+#else
 #include <M5Atom.h>  
+#endif
+
 #include "FS.h"
 #include <SPIFFS.h>
 #include "m5z700.h"
@@ -20,21 +25,31 @@
 #include <Preferences.h>
 #include "mz700lgfx.h"
 
+#if defined(_M5STICKCPLUS)
+M5GFX m5lcd;
+
+#else
 #ifdef USE_EXT_LCD
 LGFX m5lcd;
 #else
 M5AtomDisplay m5lcd(320,200);                 // LGFXのインスタンスを作成。
 #endif
-
+#endif
 int xorKey = 0x80;
 
 void setup() {
+  #if defined(_M5STICKCPLUS)
+  M5.begin(false,true,true); 
+  Wire.begin(32,33);
+  #else
   M5.begin(true,false,true); 
-  Serial.println("MAIN_START");
-  #ifndef USE_SPEAKER
+  #ifndef USE_SPEAKER_G25
   Wire.begin(26,32,100000);
   #endif
 
+  #endif
+  
+  Serial.println("MAIN_START");
   //if(digitalRead(BUTTON_A_PIN) == 0) {
   //   Serial.println("Will Load menu binary");
   //   updateFromFS(SD);
@@ -48,7 +63,7 @@ void setup() {
   m5lcd.init();
 
   //Speaker Setup
-#ifdef USE_SPEAKER
+#if defined(USE_SPEAKER_G25)||defined(USE_SPEAKER_G26)||defined(M5StickCPlus)
   ledcSetup(LEDC_CHANNEL_0, LEDC_BASE_FREQ, LEDC_TIMER_13_BIT);
   ledcAttachPin(SPEAKER_PIN, LEDC_CHANNEL_0);
 #endif  

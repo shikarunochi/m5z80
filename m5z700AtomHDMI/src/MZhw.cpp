@@ -12,7 +12,13 @@
 //----------------------------------------------------------------------------
 
 #define MZHW_H_
-#include <M5Atom.h>
+#if defined(_M5STICKCPLUS)
+#include <M5GFX.h>
+#include <M5StickCPlus.h>
+#else
+#include <M5Atom.h>  
+#endif
+
 #include "FS.h"
 #include <SPIFFS.h>
 #include <stdio.h>
@@ -649,7 +655,7 @@ void play8253(void)
 	  _8253_dat.setsound = 0;
 		//mzbeep_stop();
     //M5.Speaker.mute();
-	#ifdef USE_SPEAKER
+	#if defined(USE_SPEAKER_G25)||defined(USE_SPEAKER_G26)||defined(M5StickCPlus)
     ledcWriteTone(LEDC_CHANNEL_0, 0); // stop the tone playing:
 	#endif	
 	}
@@ -663,8 +669,12 @@ void play8253(void)
     //M5.Speaker.mute();
     //M5.Speaker.tone(freqtmp);
     //if(mzConfig.enableSound){
-	#ifdef USE_SPEAKER
-	ledcWriteTone(LEDC_CHANNEL_0, 1000000 / freqtmp);
+	#if defined(USE_SPEAKER_G25)||defined(USE_SPEAKER_G26)||defined(M5StickCPlus)
+	if(freqtmp > 0){
+		ledcWriteTone(LEDC_CHANNEL_0, 1000000 / freqtmp);
+	}else{
+		ledcWriteTone(LEDC_CHANNEL_0, 0);
+	}
 	//ledcWriteTone(LEDC_CHANNEL_0, 500000 / freqtmp);
 	#endif
     //}
@@ -676,7 +686,7 @@ void play8253(void)
 		// stop
 		//mzbeep_stop();
     //M5.Speaker.mute();
-	#ifdef USE_SPEAKER
+	#if defined(USE_SPEAKER_G25)||defined(USE_SPEAKER_G26)||defined(M5StickCPlus)
     ledcWriteTone(LEDC_CHANNEL_0, 0); // stop the tone playing:
 	#endif
 	}
@@ -803,6 +813,7 @@ int cmt_read(void)
 		//Serial.printf("old=%d new=%d\n", sysst.tape, percent);
     //Serial.println();
 		String message = "TAPE READ:" + String(percent) + " %";
+		Serial.printf("TAPE READ:%d\n" ,percent);
         updateStatusArea(message.c_str());
 		sysst.tape = percent;
 		xferFlag |= SYST_CMT;

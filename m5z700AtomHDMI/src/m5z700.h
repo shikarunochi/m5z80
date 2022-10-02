@@ -95,7 +95,11 @@ enum MSGQID
 #define ROM_DIRECTORY ""
 #define TAPE_DIRECTORY ""
 //#define DEFAULT_ROM_FILE  "1Z009.ROM"
+#if defined(USE_EXT_LCD)
+#define DEFAULT_ROM_FILE  "SP-1002.ROM"
+#else
 #define DEFAULT_ROM_FILE  "NEWMON7.ROM"
+#endif
 #define DEFAULT_TAPE_FILE  "WH_newmon.mzt"
 #define DEFAULT_FONT_FILE  "MZ700FON.JP"
 

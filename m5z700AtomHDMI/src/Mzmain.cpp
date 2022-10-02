@@ -123,20 +123,27 @@ CRGB dispColor(uint8_t g, uint8_t r, uint8_t b) {
 }
 #endif
 
+#define SHIFT_KEY_700 0x80
+#define SFT7 0x80
+
+//左シフト0x85,右シフト0x80
+#define SHIFT_KEY_80C 0x80
+#define SFT8 0x80
+
 //MZ-80K/C キーマトリクス参考：http://www43.tok2.com/home/cmpslv/Mz80k/EnrMzk.htm
 unsigned char ak_tbl_80c[] =
 {
-  0xff, 0xff, 0xff, 0x80, 0xff, 0xff, 0xff, 0xff, 0xff, 0x65, 0xff, 0x80, 0xff, 0x84, 0xff, 0xff,
-  0xff, 0x92, 0x80, 0x83, 0x80, 0x90, 0x80, 0x81, 0x80, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+  0xff, 0xff, 0xff, SFT8, 0xff, 0xff, 0xff, 0xff, 0xff, 0x65, 0xff, SFT8, 0xff, 0x84, 0xff, 0xff,
+  0xff, 0x92, SFT8, 0x83, SFT8, 0x90, SFT8, 0x81, SFT8, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
 
   // " "    !     "     #     $     %     &     '     (     )     *     +     ,     -     .     /
-  0x91, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x73, 0x05, 0x64, 0x74,
+  0x91, SFT8, SFT8, SFT8, SFT8, SFT8, SFT8, SFT8, SFT8, SFT8, SFT8, SFT8, 0x73, 0x05, 0x64, 0x74,
   //  0     1     2     3     4     5     6     7     8     9     :     ;     <     =     >     ?
-  0x14, 0x00, 0x10, 0x01, 0x11, 0x02, 0x12, 0x03, 0x13, 0x04, 0x80, 0x54, 0x80, 0x25, 0x80, 0x80,
+  0x14, 0x00, 0x10, 0x01, 0x11, 0x02, 0x12, 0x03, 0x13, 0x04, SFT8, 0x54, SFT8, 0x25, SFT8, SFT8,
   //  @     A     B     C     D     E     F     G     H     I     J     K     L     M     N     O
-  0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80,
+  SFT8, SFT8, SFT8, SFT8, SFT8, SFT8, SFT8, SFT8, SFT8, SFT8, SFT8, SFT8, SFT8, SFT8, SFT8, SFT8,
   //  P     Q     R     S     T     U     V     W     X     Y     Z     [     \     ]     ^     _
-  0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0xff, 0xff,
+  SFT8, SFT8, SFT8, SFT8, SFT8, SFT8, SFT8, SFT8, SFT8, SFT8, SFT8, SFT8, SFT8, SFT8, 0xff, 0xff,
   //  `     a     b     c     d     e     f     g     h     i     j     k     l     m     n     o
   0xff, 0x40, 0x62, 0x61, 0x41, 0x21, 0x51, 0x42, 0x52, 0x33, 0x43, 0x53, 0x44, 0x63, 0x72, 0x24,
   //  p     q     r     s     t     u     v     w     x     y     z     {     |     }     ~
@@ -533,8 +540,6 @@ unsigned char hid_to_mz80c[] ={
 0xff//232-65535	0xE8-0xFFFF	Reserved
 };
 
-#define SHIFT_KEY_700 0x80
-#define SHIFT_KEY_80C 0x85
 unsigned char *ak_tbl;
 unsigned char *ak_tbl_s;
 unsigned char *hid_to_emu;
@@ -901,6 +906,7 @@ void mainloop(void)
     if (n > 0){
           gui_hid(buf,n);
     }
+
     M5.update();
 
     //if(M5.Btn.wasPressed()){
@@ -1032,10 +1038,15 @@ void scrn_draw()
 //--------------------------------------------------------------
 // キーボード入力チェック
 //--------------------------------------------------------------
+int delayInputKeyCode = 0;  //SHIFT併用時にkeyDownを少し遅らせる
 void keyCheck() {
   //入力がある場合、5回は入力のまま。
   if (preKeyCode != -1) {
     keyCheckCount++;
+    if(delayInputKeyCode != 0){
+       mz_keydown_sub(delayInputKeyCode);
+       delayInputKeyCode  = 0;
+    }
     if (keyCheckCount < 5) {
       return;
     }
@@ -1092,6 +1103,8 @@ void keyCheck() {
     if (inKeyCode == 0) {
       return;
     }
+    //Serial.printf("inkeyCode:%#x:%#x:%#x\n", inKeyCode,ak_tbl[inKeyCode],ak_tbl_s[inKeyCode]);
+
     if (ak_tbl[inKeyCode] == 0xff)
     {
       //何もしない
@@ -1099,13 +1112,16 @@ void keyCheck() {
     else if (ak_tbl[inKeyCode] == shift_code)
     {
       mz_keydown_sub(shift_code);
-      mz_keydown_sub(ak_tbl_s[inKeyCode]);
+      //mz_keydown_sub(ak_tbl_s[inKeyCode]);
+      delayInputKeyCode = ak_tbl_s[inKeyCode];
+      preKeyCode = ak_tbl_s[inKeyCode];
     }
     else
     {
       mz_keydown_sub(ak_tbl[inKeyCode]);
+      preKeyCode = ak_tbl[inKeyCode];
     }
-    preKeyCode = ak_tbl[inKeyCode];
+    
   } else {
     if (ctrlFlag == true) {
       mz_keydown_sub(0x86);
@@ -1113,12 +1129,11 @@ void keyCheck() {
       ctrlFlag = false;
     }
     if (shiftFlag == true) {
-      mz_keydown_sub(0x80);
-      preKeyCode = 0x80;
+      mz_keydown_sub(shift_code);
+      preKeyCode = shift_code;
       shiftFlag = false;
 
     }
-
   }
 }
 
@@ -1352,7 +1367,7 @@ int checkI2cKeyboard() {
 }
 
 String selectMzt() {
-	#if defined(USE_SPEAKER_G25)||defined(USE_SPEAKER_G26)||defined(M5StickCPlus)
+	#if defined(USE_SPEAKER_G25)||defined(USE_SPEAKER_G26)||defined(_M5STICKCPLUS)
     ledcWriteTone(LEDC_CHANNEL_0, 0); // stop the tone playing:
 	#endif	
   File fileRoot;
@@ -1843,7 +1858,7 @@ void systemMenu()
   #endif
     ""
   };
-	#if defined(USE_SPEAKER_G25)||defined(USE_SPEAKER_G26)||defined(M5StickCPlus)
+	#if defined(USE_SPEAKER_G25)||defined(USE_SPEAKER_G26)||defined(_M5STICKCPLUS)
     ledcWriteTone(LEDC_CHANNEL_0, 0); // stop the tone playing:
 	#endif	
   delay(10);

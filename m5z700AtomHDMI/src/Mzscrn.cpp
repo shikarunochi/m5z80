@@ -64,7 +64,7 @@ int bgColorIndex = 0;
 int MZ700_COLOR[] = {BLACK, BLUE, RED, MAGENTA, GREEN, CYAN, YELLOW, WHITE};
 
 int lcdMode = 0;
-int lcdRotate = 0;
+//int lcdRotate = 0; move to m5z700AtomHDMI.ino
 
 boolean needScreenUpdateFlag;
 boolean screnUpdateValidFlag;

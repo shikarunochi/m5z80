@@ -37,24 +37,30 @@ M5AtomDisplay m5lcd(320,200);                 // LGFXのインスタンスを作
 #endif
 int xorKey = 0x80;
 
+int lcdRotate = 0;
+
 void setup() {
   #if defined(_M5STICKCPLUS)
   M5.begin(false,true,true); 
   Wire.begin(32,33);
   #else
+  //M5AtomLite
   M5.begin(true,false,true); 
-  #ifndef USE_SPEAKER_G25
+  #ifndef USE_SPEAKER_G26
   Wire.begin(26,32,100000);
   #endif
 
   #endif
   
   Serial.println("MAIN_START");
-  //if(digitalRead(BUTTON_A_PIN) == 0) {
-  //   Serial.println("Will Load menu binary");
-  //   updateFromFS(SD);
-  //   ESP.restart();
-  //}
+  #if !defined(_M5STICKCPLUS)
+  if(digitalRead(39) == 0) { //M5Atom Button
+     Serial.println("RoteteMode:for extCRT");
+     //strcpy(mzConfig.romFile, "1Z009.ROM"); MZ-700 MODE
+     lcdRotate = 1;
+     m5lcd.setRotation(3);
+  }
+  #endif
   if (!SPIFFS.begin()) { 
     Serial.println("SPIFFS Mount Failed");
     return;
@@ -63,7 +69,7 @@ void setup() {
   m5lcd.init();
 
   //Speaker Setup
-#if defined(USE_SPEAKER_G25)||defined(USE_SPEAKER_G26)||defined(M5StickCPlus)
+#if defined(USE_SPEAKER_G25)||defined(USE_SPEAKER_G26)||defined(_M5STICKCPLUS)
   ledcSetup(LEDC_CHANNEL_0, LEDC_BASE_FREQ, LEDC_TIMER_13_BIT);
   ledcAttachPin(SPEAKER_PIN, LEDC_CHANNEL_0);
 #endif  

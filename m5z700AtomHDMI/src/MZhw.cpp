@@ -655,7 +655,7 @@ void play8253(void)
 	  _8253_dat.setsound = 0;
 		//mzbeep_stop();
     //M5.Speaker.mute();
-	#if defined(USE_SPEAKER_G25)||defined(USE_SPEAKER_G26)||defined(M5StickCPlus)
+	#if defined(USE_SPEAKER_G25)||defined(USE_SPEAKER_G26)||defined(_M5STICKCPLUS)
     ledcWriteTone(LEDC_CHANNEL_0, 0); // stop the tone playing:
 	#endif	
 	}
@@ -669,7 +669,7 @@ void play8253(void)
     //M5.Speaker.mute();
     //M5.Speaker.tone(freqtmp);
     //if(mzConfig.enableSound){
-	#if defined(USE_SPEAKER_G25)||defined(USE_SPEAKER_G26)||defined(M5StickCPlus)
+	#if defined(USE_SPEAKER_G25)||defined(USE_SPEAKER_G26)||defined(_M5STICKCPLUS)
 	if(freqtmp > 0){
 		ledcWriteTone(LEDC_CHANNEL_0, 1000000 / freqtmp);
 	}else{
@@ -686,7 +686,7 @@ void play8253(void)
 		// stop
 		//mzbeep_stop();
     //M5.Speaker.mute();
-	#if defined(USE_SPEAKER_G25)||defined(USE_SPEAKER_G26)||defined(M5StickCPlus)
+	#if defined(USE_SPEAKER_G25)||defined(USE_SPEAKER_G26)||defined(_M5STICKCPLUS)
     ledcWriteTone(LEDC_CHANNEL_0, 0); // stop the tone playing:
 	#endif
 	}

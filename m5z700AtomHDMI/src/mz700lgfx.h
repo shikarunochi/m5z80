@@ -4,6 +4,8 @@
 #if defined(_M5STICKCPLUS)
 #include <M5GFX.h>
 #include <M5StickCPlus.h>
+#elif defined(_M5ATOMS3)
+#include <M5Unified.h>
 #else
 #include <M5Atom.h>  
 #define LGFX_M5STACK     
@@ -12,11 +14,20 @@
 
 #ifdef USE_EXT_LCD
 #include <M5GFX.h>
+
+#if !defined(USE_ST7735S)
 #include <lgfx/v1/panel/Panel_ST7789.hpp>
+#else
+#include <lgfx/v1/panel/Panel_ST7735.hpp>
+#endif
 
 class LGFX : public lgfx::LGFX_Device
 {
+#if !defined(USE_ST7735S)
   lgfx::Panel_ST7789      _panel_instance;
+#else
+  lgfx::Panel_ST7735S      _panel_instance;
+#endif
   lgfx::Bus_SPI       _bus_instance;   // SPIバスのインスタンス
   public:
     LGFX(void)
@@ -24,7 +35,11 @@ class LGFX : public lgfx::LGFX_Device
       { // バス制御の設定を行います。
         auto cfg = _bus_instance.config();    // バス設定用の構造体を取得します。
         cfg.spi_host = VSPI_HOST;     // 使用するSPIを選択  (VSPI_HOST or HSPI_HOST)
+#if !defined(USE_ST7735S)
         cfg.spi_mode = 3;             // SPI通信モードを設定 (0 ~ 3)
+#else
+        cfg.spi_mode = 0;             // SPI通信モードを設定 (0 ~ 3)
+#endif
         cfg.freq_write = 40000000;    // 送信時のSPIクロック (最大80MHz, 80MHzを整数で割った値に丸められます)
         cfg.freq_read  = 16000000;    // 受信時のSPIクロック
         cfg.spi_3wire  = false;        // 受信をMOSIピンで行う場合はtrueを設定
@@ -46,19 +61,38 @@ class LGFX : public lgfx::LGFX_Device
         cfg.pin_busy         =    -1;  // BUSYが接続されているピン番号 (-1 = disable)
 
         // ※ 以下の設定値はパネル毎に一般的な初期値が設定されていますので、不明な項目はコメントアウトして試してみてください。
-
+#if !defined(USE_ST7735S)
         cfg.memory_width     =   240;  // ドライバICがサポートしている最大の幅
         cfg.memory_height    =   320;  // ドライバICがサポートしている最大の高さ
         cfg.panel_width      =   240;  // 実際に表示可能な幅
         cfg.panel_height     =   240;  // 実際に表示可能な高さ
         cfg.offset_x         =     0;  // パネルのX方向オフセット量
         cfg.offset_y         =     0;  // パネルのY方向オフセット量
+#else
+        cfg.memory_width     =   128;  // ドライバICがサポートしている最大の幅
+        cfg.memory_height    =   160;  // ドライバICがサポートしている最大の高さ
+        cfg.panel_width      =   128;  // 実際に表示可能な幅
+        cfg.panel_height     =   160;  // 実際に表示可能な高さ
+        cfg.offset_x         =     2;  // パネルのX方向オフセット量
+        cfg.offset_y         =     -1;  // パネルのY方向オフセット量
+#endif
+
+#if !defined(USE_ST7735S)
         cfg.offset_rotation  =     0;  // 回転方向の値のオフセット 0~7 (4~7は上下反転)
+#else
+        cfg.offset_rotation  =     3;  // 回転方向の値のオフセット 0~7 (4~7は上下反転)
+#endif
         cfg.dummy_read_pixel =     8;  // ピクセル読出し前のダミーリードのビット数
         cfg.dummy_read_bits  =     1;  // ピクセル以外のデータ読出し前のダミーリードのビット数
         cfg.readable         =  false;  // データ読出しが可能な場合 trueに設定
+#if !defined(USE_ST7735S)
         cfg.invert           =  true;  // パネルの明暗が反転してしまう場合 trueに設定
         cfg.rgb_order        = false;  // パネルの赤と青が入れ替わってしまう場合 trueに設定
+#else
+        cfg.invert           =  false;  // パネルの明暗が反転してしまう場合 trueに設定
+        cfg.rgb_order        = true;  // パネルの赤と青が入れ替わってしまう場合 trueに設定
+#endif
+        
         cfg.dlen_16bit       = false;  // データ長を16bit単位で送信するパネルの場合 trueに設定
         cfg.bus_shared       =  false;  // SDカードとバスを共有している場合 trueに設定(drawJpgFile等でバス制御を行います)
 
@@ -72,6 +106,8 @@ extern LGFX m5lcd;
 #else
 #if defined(_M5STICKCPLUS)
 extern M5GFX  m5lcd;
+#elif defined(_M5ATOMS3)
+extern M5GFX m5lcd;
 #else
 
 #include <M5AtomDisplay.h>

@@ -13,6 +13,79 @@
 #if defined(_M5STICKCPLUS)
 #include <M5GFX.h>
 #include <M5StickCPlus.h>
+#elif defined(_M5ATOMS3)
+#include <M5Unified.h>
+#include <Wire.h>
+//USBキーボード
+#include <elapsedMillis.h>
+#include <usb/usb_host.h>
+#include "usbhhelp.hpp"
+bool isKeyboard = false;
+bool isKeyboardReady = false;
+uint8_t KeyboardInterval;
+bool isKeyboardPolling = false;
+elapsedMillis KeyboardTimer;
+
+const size_t KEYBOARD_IN_BUFFER_SIZE = 8;
+usb_transfer_t *KeyboardIn = NULL;
+void check_interface_desc_boot_keyboard(const void *p);
+void prepare_endpoint(const void *p);
+void show_config_desc_full(const usb_config_desc_t *config_desc)
+{
+   // Full decode of config desc.
+  const uint8_t *p = &config_desc->val[0];
+  static uint8_t USB_Class = 0;
+  uint8_t bLength;
+  for (int i = 0; i < config_desc->wTotalLength; i+=bLength, p+=bLength) {
+    bLength = *p;
+    if ((i + bLength) <= config_desc->wTotalLength) {
+      const uint8_t bDescriptorType = *(p + 1);
+      switch (bDescriptorType) {
+        case USB_B_DESCRIPTOR_TYPE_DEVICE:
+          ESP_LOGI("", "USB Device Descriptor should not appear in config");
+          break;
+        case USB_B_DESCRIPTOR_TYPE_CONFIGURATION:
+          //show_config_desc(p);
+          break;
+        case USB_B_DESCRIPTOR_TYPE_STRING:
+          ESP_LOGI("", "USB string desc TBD");
+          break;
+        case USB_B_DESCRIPTOR_TYPE_INTERFACE:
+          //USB_Class = show_interface_desc(p);
+          check_interface_desc_boot_keyboard(p);
+          break;
+        case USB_B_DESCRIPTOR_TYPE_ENDPOINT:
+          //show_endpoint_desc(p);
+          if (isKeyboard && KeyboardIn == NULL) prepare_endpoint(p);
+          break;
+        case USB_B_DESCRIPTOR_TYPE_DEVICE_QUALIFIER:
+          // Should not be config config?
+          ESP_LOGI("", "USB device qual desc TBD");
+          break;
+        case USB_B_DESCRIPTOR_TYPE_OTHER_SPEED_CONFIGURATION:
+          // Should not be config config?
+          ESP_LOGI("", "USB Other Speed TBD");
+          break;
+        case USB_B_DESCRIPTOR_TYPE_INTERFACE_POWER:
+          // Should not be config config?
+          ESP_LOGI("", "USB Interface Power TBD");
+          break;
+        case 0x21:
+          if (USB_Class == USB_CLASS_HID) {
+            //show_hid_desc(p);
+          }
+          break;
+        default:
+          ESP_LOGI("", "Unknown USB Descriptor Type: 0x%x", bDescriptorType);
+          break;
+      }
+    }
+    else {
+      ESP_LOGI("", "USB Descriptor invalid");
+      return;
+    }
+  }
+}
 #else
 #include <M5Atom.h>  
 #endif
@@ -43,8 +116,10 @@
 #include "m5z700.h"
 #include "mz700lgfx.h"
 
+#if defined(USE_HID)
 #include "hid_server/hid_server.h"
 #include "hid_server/hci_server.h"
+#endif
 
 #define ROM_START  0
 #define L_TMPEX  0x0FFE
@@ -88,7 +163,11 @@ bool inputStringMode;
 
 void sortList(String fileList[], int fileListCount);
 static void keyboard(const uint8_t* d, int len);
+
+#if defined(USE_HID)
 void gui_hid(const uint8_t* hid, int len);  // Parse HID event
+#endif
+
 static bool saveMZTImage();
 
 bool joyPadPushed_U;
@@ -102,6 +181,10 @@ bool enableJoyPadButton;
 
 SYS_STATUS sysst;
 int xferFlag = 0;
+
+bool wonderHouseMode;
+int wonderHouseKeyIndex;
+int wonderHouseKey();
 
 #define SyncTime	17									/* 1/60 sec.(milsecond) */
 
@@ -117,7 +200,8 @@ typedef struct KBDMSG_t {
   unsigned char msg[80];
 } KBDMSG;
 
-#ifndef _M5STICKCPLUS
+#if defined(_M5STICKCPLUS)||defined(_M5ATOMS3)
+#else
 CRGB dispColor(uint8_t g, uint8_t r, uint8_t b) {
   return (CRGB)((g << 16) | (r << 8) | b);
 }
@@ -187,7 +271,7 @@ unsigned char ak_tbl_s_700[] =
 };
 
 unsigned char hid_to_mz700[] ={
-0xff,//0	0x00	Reserved (no event indicated)
+0xff,//0	0x00	Reserved (no event indicated)gui_hid
 0xff,//1	0x01	Keyboard ErrorRollOver?
 0xff,//2	0x02	Keyboard POSTFail
 0xff,//3	0x03	Keyboard ErrorUndefined?
@@ -772,12 +856,16 @@ int mz80c_main()
   Serial.println("M5Z-700 START");
   m5lcd.println("M5Z-700 START");
   
+  #if defined(USE_HID)
   hid_init("emu32"); 
   m5lcd.println("HID START"); 
-
+  #endif
   btKeyboardConnect = false;
-
-  #ifndef _M5STICKCPLUS
+  #if defined(_M5ATOMS3)
+  usbh_setup(show_config_desc_full);
+  #endif
+  #if defined(_M5STICKCPLUS)||defined(_M5ATOMS3)
+  #else
   M5.dis.drawpix(0, dispColor(50,0,0));
   #endif
   #if defined(USE_SPEAKER_G26)
@@ -889,15 +977,18 @@ void mainloop(void)
     //M5Atomでスピーカーピンに G26使った場合、GROVE WIRE と排他
     keyCheck();
 #endif
+#if defined(USE_HID)
+    hid_update(); //ESP32 + espressif32 5.2.0だと、なぜか、ここで落ちるようになってしまった…。
 
-    hid_update();
     uint8_t buf[64];
+    
     int n = hid_get(buf,sizeof(buf));    // called from emulation loop
     if(n != -1){ //Bluetoothキーボード接続完了…と思われる。
       if(btKeyboardConnect == false){
         btKeyboardConnect = true;
         //接続したらLEDを緑に。
-        #ifndef _M5STICKCPLUS
+        #if defined(_M5STICKCPLUS)||defined(_M5ATOMS3)
+        #else
         M5.dis.drawpix(0, dispColor(0,50,0));
         #endif
         updateStatusArea("");
@@ -906,7 +997,20 @@ void mainloop(void)
     if (n > 0){
           gui_hid(buf,n);
     }
+#endif
+#if defined(_M5ATOMS3)
+  usbh_task();
 
+  if (isKeyboardReady && !isKeyboardPolling && (KeyboardTimer > KeyboardInterval)) {
+    KeyboardIn->num_bytes = 8;
+    esp_err_t err = usb_host_transfer_submit(KeyboardIn);
+    if (err != ESP_OK) {
+      ESP_LOGI("", "usb_host_transfer_submit In fail: %x", err);
+    }
+    isKeyboardPolling = true;
+    KeyboardTimer = 0;
+  }
+#endif
     M5.update();
 
     //if(M5.Btn.wasPressed()){
@@ -930,6 +1034,12 @@ void mainloop(void)
     //}
     #if defined(_M5STICKCPLUS)
     if (M5.BtnB.wasReleased()) {
+    #elif defined(_M5ATOMS3)
+    if (M5.BtnA.pressedFor(1000)) {
+      while(M5.BtnA.wasReleased()==false){ //離されるのを待つ
+        M5.update();
+        delay(100);
+      }
     #else
     if (M5.Btn.wasReleasefor(1000)) {
     #endif
@@ -942,7 +1052,7 @@ void mainloop(void)
       m5lcd.fillScreen(TFT_BLACK);
       suspendScrnThreadFlag = false;
       set_scren_update_valid_flag(true);
-    #if defined(_M5STICKCPLUS)
+    #if defined(_M5STICKCPLUS)||defined(_M5ATOMS3)
     }else if (M5.BtnA.wasReleased()) {
     #else
     }else if (M5.Btn.wasReleased()) {
@@ -1100,6 +1210,11 @@ void keyCheck() {
     if (inKeyCode == 0) {
       inKeyCode = checkI2cKeyboard();
     }
+
+    if (inKeyCode == 0 && wonderHouseMode == true) {
+      inKeyCode = wonderHouseKey();
+    }
+
     if (inKeyCode == 0) {
       return;
     }
@@ -1213,7 +1328,6 @@ void checkJoyPad() {
     }
   }
 
-
   if (joyX == 0) {
     return; //接続されていない
   }
@@ -1312,12 +1426,14 @@ void checkJoyPad() {
 //--------------------------------------------------------------
 int checkI2cKeyboard() {
   uint8_t i2cKeyCode = 0;
+
   if (Wire.requestFrom(CARDKB_ADDR, 1)) { // request 1 byte from keyboard
     while (Wire.available()) {
       i2cKeyCode = Wire.read();                  // receive a byte as
       break;
     }
   }
+
   if (i2cKeyCode == 0) {
     return 0;
   }
@@ -1364,6 +1480,37 @@ int checkI2cKeyboard() {
   }
   return i2cKeyCode;
 
+}
+
+long wonderHouseKeyDelayMillis = 0;
+
+
+int wonderHouseKey(){
+  //時間待ち
+  if(wonderHouseMode == false){
+    return 0;
+  }
+  long nowMillis = millis();
+  char inputKey = 0;
+  if(nowMillis > wonderHouseKeyDelayMillis){
+    inputKey = wonderHouseKeyData[wonderHouseKeyIndex];
+    if(inputKey == 'E'){
+      wonderHouseMode = false;
+      return 0;
+    }
+    if(wonderHouseKeyIndex == 0){
+      wonderHouseKeyDelayMillis = nowMillis + 200 * 10;
+    }else if(wonderHouseKeyIndex == 1){
+      wonderHouseKeyDelayMillis = nowMillis + 1000 * 10;
+    }else if(inputKey == '\n'){
+      wonderHouseKeyDelayMillis = nowMillis + 1000 * 5;
+      inputKey = 0x0D;
+    }else{
+      wonderHouseKeyDelayMillis = nowMillis + 100;
+    }
+    wonderHouseKeyIndex++;
+  }
+  return inputKey;
 }
 
 String selectMzt() {
@@ -1437,6 +1584,8 @@ String selectMzt() {
   bool isButtonLongPress = false;
   #if defined(_M5STICKCPLUS)
   int dispfileCount = 12;
+  #elif defined(_M5ATOMS3)||defined(USE_ST7735S)
+  int dispfileCount = 15;
   #else
   int dispfileCount = 21;
   #endif
@@ -1534,7 +1683,7 @@ String selectMzt() {
     //    needRedraw = true;
     //  }
     //}
-    #if defined(_M5STICKCPLUS)
+    #if defined(_M5STICKCPLUS)||defined(_M5ATOMS3)
     if(M5.BtnA.pressedFor(1000)){ //長押しになった場合色を変える
     #else
     if(M5.Btn.pressedFor(1000)){ //長押しになった場合色を変える
@@ -1546,6 +1695,8 @@ String selectMzt() {
     }
     #if defined(_M5STICKCPLUS)
     if (M5.BtnA.wasReleasefor(1000))
+    #elif defined(_M5ATOMS3)
+    if (M5.BtnA.wasReleased() && isButtonLongPress == true)
     #else
     if (M5.Btn.wasReleasefor(1000))
     #endif
@@ -1606,7 +1757,7 @@ String selectMzt() {
           }
         //}
       }
-    #if defined(_M5STICKCPLUS)
+    #if defined(_M5STICKCPLUS)||defined(_M5ATOMS3)
     }else if (M5.BtnA.wasReleased()){
     #else
     }else if (M5.Btn.wasReleased()){
@@ -1837,7 +1988,8 @@ int setMztToMemory(String mztFile) {
 
 #define SET_TO_MEMORY_INDEX 5
 #define SAVE_IMAGE_INDEX 6
-#define PCG_OR_ROTATE_LCD_INDEX 7
+#define WONDER_HOUSE_MODE_INDEX 7
+#define PCG_OR_ROTATE_LCD_INDEX 8
 
 void systemMenu()
 {
@@ -1850,7 +2002,8 @@ void systemMenu()
     "RESET:SP-1002",
     "SET MZT TO MEMORY",
     "SAVE MZT Image",
-  #if defined (USE_EXT_LCD)
+    "Wonder House Mode",
+  #if defined (USE_EXT_LCD)||defined(_M5ATOMS3)
     "Rotate LCD",
   #elif defined(_M5STICKCPLUS)
   #else
@@ -1900,7 +2053,7 @@ void systemMenu()
           curItem = curItem + ((firstLoadFlag == true) ? String(": ON") : String(": OFF"));
         }
         if (index == PCG_OR_ROTATE_LCD_INDEX) {
-        #if defined (USE_EXT_LCD)
+        #if defined (USE_EXT_LCD)||defined(_M5ATOMS3)
         #else
           curItem = curItem + ((hw700.pcg700_mode == 1) ? String(": ON") : String(": OFF"));
         #endif
@@ -1935,7 +2088,7 @@ void systemMenu()
       needRedraw = false;
     }
     M5.update();
-  #if defined(_M5STICKCPLUS)
+  #if defined(_M5STICKCPLUS)||defined(_M5ATOMS3)
     if(M5.BtnA.pressedFor(1000)){ //長押しになった場合色を変える
   #else
     if(M5.Btn.pressedFor(1000)){ //長押しになった場合色を変える
@@ -1957,6 +2110,8 @@ void systemMenu()
     //}
   #if defined(_M5STICKCPLUS)
     if (M5.BtnA.wasReleasefor(1000))
+  #elif defined(_M5ATOMS3)
+    if (M5.BtnA.wasReleased() && isButtonLongPress == true)
   #else
     if (M5.Btn.wasReleasefor(1000))
   #endif
@@ -1987,8 +2142,12 @@ void systemMenu()
         case SAVE_IMAGE_INDEX:
           saveMZTImage();
           break;
+        case WONDER_HOUSE_MODE_INDEX:
+          wonderHouseMode = true;
+          wonderHouseKeyIndex = 0;
+          break;
         case PCG_OR_ROTATE_LCD_INDEX:
-        #if defined (USE_EXT_LCD)
+        #if defined (USE_EXT_LCD)||defined(_M5ATOMS3)
           if(lcdRotate == 0){
             lcdRotate = 1;
             m5lcd.setRotation(3);
@@ -2021,7 +2180,7 @@ void systemMenu()
       m5lcd.setCursor(0, 0);
       needRedraw = true;
       isButtonLongPress = false;
-    #if defined(_M5STICKCPLUS)
+    #if defined(_M5STICKCPLUS)||defined(_M5ATOMS3)
     }else if (M5.BtnA.wasReleased()) {
     #else
     }else if (M5.Btn.wasReleased()) {
@@ -2076,7 +2235,7 @@ void sys_msg(const char* msg) {
 
 void gui_hid(const uint8_t* hid, int len)  // Parse HID event
 {
-
+#if defined(USE_HID)
     if (hid[0] != 0xA1)
         return;
     /*
@@ -2089,7 +2248,7 @@ void gui_hid(const uint8_t* hid, int len)  // Parse HID event
 //        case 0x32: wii();                   break;   // parse wii stuff: generic?
 //        case 0x42: ir(hid+2,len);           break;   // ir joy
     }
-
+#endif
 }
 
 
@@ -2203,5 +2362,73 @@ static bool saveMZTImage(){
   m5lcd.println("COMPLTE!");
   delay(2000);
   return true;
+}
+
+void keyboard_transfer_cb(usb_transfer_t *transfer)
+{
+  if (Device_Handle == transfer->device_handle) {
+    isKeyboardPolling = false;
+    if (transfer->status == 0) {
+      if (transfer->actual_num_bytes == 8) {
+        uint8_t *const p = transfer->data_buffer;
+        //bluetoothキーボードとあわせる。[1]にmodiry[3]にキーコード
+        uint8_t keyData[4];
+        keyData[1] = p[0];
+        keyData[3] = p[2];
+        
+        //M5.Display.setCursor(0,0);
+        //M5.Display.setTextColor(WHITE,BLACK);
+        //M5.Display.printf("HID report: %02x %02x %02x %02x %02x %02x %02x %02x",
+         //   p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7]);
+
+            keyboard(keyData,4);
+
+     }
+    }
+  }
+}
+void check_interface_desc_boot_keyboard(const void *p)
+{
+  const usb_intf_desc_t *intf = (const usb_intf_desc_t *)p;
+
+  if ((intf->bInterfaceClass == USB_CLASS_HID) &&
+      (intf->bInterfaceSubClass == 1) &&
+      (intf->bInterfaceProtocol == 1)) {
+    isKeyboard = true;
+    ESP_LOGI("", "Claiming a boot keyboard!");
+    esp_err_t err = usb_host_interface_claim(Client_Handle, Device_Handle,
+        intf->bInterfaceNumber, intf->bAlternateSetting);
+    if (err != ESP_OK) ESP_LOGI("", "usb_host_interface_claim failed: %x", err);
+  }
+}
+
+void prepare_endpoint(const void *p)
+{
+  const usb_ep_desc_t *endpoint = (const usb_ep_desc_t *)p;
+  esp_err_t err;
+
+  // must be interrupt for HID
+  if ((endpoint->bmAttributes & USB_BM_ATTRIBUTES_XFERTYPE_MASK) != USB_BM_ATTRIBUTES_XFER_INT) {
+    ESP_LOGI("", "Not interrupt endpoint: 0x%02x", endpoint->bmAttributes);
+    return;
+  }
+  if (endpoint->bEndpointAddress & USB_B_ENDPOINT_ADDRESS_EP_DIR_MASK) {
+    err = usb_host_transfer_alloc(KEYBOARD_IN_BUFFER_SIZE, 0, &KeyboardIn);
+    if (err != ESP_OK) {
+      KeyboardIn = NULL;
+      ESP_LOGI("", "usb_host_transfer_alloc In fail: %x", err);
+      return;
+    }
+    KeyboardIn->device_handle = Device_Handle;
+    KeyboardIn->bEndpointAddress = endpoint->bEndpointAddress;
+    KeyboardIn->callback = keyboard_transfer_cb;
+    KeyboardIn->context = NULL;
+    isKeyboardReady = true;
+    KeyboardInterval = endpoint->bInterval;
+    ESP_LOGI("", "USB boot keyboard ready");
+  }
+  else {
+    ESP_LOGI("", "Ignoring interrupt Out endpoint");
+  }
 }
 

@@ -15,6 +15,8 @@
 #if defined(_M5STICKCPLUS)
 #include <M5GFX.h>
 #include <M5StickCPlus.h>
+#elif defined(_M5ATOMS3)
+#include <M5Unified.h>
 #else
 #include <M5Atom.h>  
 #endif

@@ -96,7 +96,11 @@ enum MSGQID
 #define TAPE_DIRECTORY ""
 //#define DEFAULT_ROM_FILE  "1Z009.ROM"
 #if defined(USE_EXT_LCD)
+#if !defined(USE_ST7735S)
 #define DEFAULT_ROM_FILE  "SP-1002.ROM"
+#else
+#define DEFAULT_ROM_FILE  "1Z009.ROM"
+#endif
 #else
 #define DEFAULT_ROM_FILE  "NEWMON7.ROM"
 #endif

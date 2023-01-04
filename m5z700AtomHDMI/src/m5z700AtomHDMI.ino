@@ -13,6 +13,9 @@
 #if defined(_M5STICKCPLUS)
 #include <M5GFX.h>
 #include <M5StickCPlus.h>
+#elif defined(_M5ATOMS3)
+#include <M5Unified.h>
+#include<Wire.h>
 #else
 #include <M5Atom.h>  
 #endif
@@ -27,7 +30,8 @@
 
 #if defined(_M5STICKCPLUS)
 M5GFX m5lcd;
-
+#elif defined(_M5ATOMS3)
+M5GFX m5lcd;
 #else
 #ifdef USE_EXT_LCD
 LGFX m5lcd;
@@ -43,22 +47,32 @@ void setup() {
   #if defined(_M5STICKCPLUS)
   M5.begin(false,true,true); 
   Wire.begin(32,33);
+  #elif defined(_M5ATOMS3)
+  auto cfg = M5.config();
+  cfg.internal_imu=false;
+  M5.begin(cfg);
+  Wire.begin(2,1);
+  m5lcd = M5.Display;
+  m5lcd.setRotation(0);
   #else
   //M5AtomLite
   M5.begin(true,false,true); 
   #ifndef USE_SPEAKER_G26
-  Wire.begin(26,32,100000);
+  Wire.begin(26,32);
   #endif
-
+  m5lcd.init();
   #endif
   
+  //m5lcd.init();
+
   Serial.println("MAIN_START");
+  
   #if !defined(_M5STICKCPLUS)
   if(digitalRead(39) == 0) { //M5Atom Button
      Serial.println("RoteteMode:for extCRT");
      //strcpy(mzConfig.romFile, "1Z009.ROM"); MZ-700 MODE
      lcdRotate = 1;
-     m5lcd.setRotation(3);
+     m5lcd.setRotation(2);
   }
   #endif
   if (!SPIFFS.begin()) { 
@@ -66,7 +80,7 @@ void setup() {
     return;
   }
   mzConfig.enableSound = false; //起動時はサウンドOFF
-  m5lcd.init();
+
 
   //Speaker Setup
 #if defined(USE_SPEAKER_G25)||defined(USE_SPEAKER_G26)||defined(_M5STICKCPLUS)

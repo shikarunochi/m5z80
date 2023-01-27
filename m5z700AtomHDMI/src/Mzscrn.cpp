@@ -58,6 +58,9 @@ LGFX_Sprite canvas(&m5lcd);
 #include "mzfont6x8.h"
 M5Canvas canvas(&m5lcd);
 #endif
+#if defined(_M5STACK)
+M5Canvas canvas(&m5lcd);
+#endif
 
 
 int fontOffset = 0;
@@ -98,6 +101,11 @@ int mz_screen_init(void)
   #endif
   #if defined(_M5ATOMS3)
   canvas.createSprite(40,240); //メモリ足りないので縦40ドット（=5行）に分割して5回に分けて描画する。8x6フォントを90度横向きで描画した後、90度回転させてpushする。
+  #endif
+  #if defined(_M5STACK)
+  canvas.setColorDepth(8);
+  canvas.setTextSize(1);
+  canvas.createSprite(320,40); //メモリ足りないので縦40ドット（=5行）に分割して5回に分けて描画する。
   #endif
 
 
@@ -230,7 +238,7 @@ void update_scrn_thread(void *pvParameters)
       bgColor = 0;
       fgColorIndex = 0;
       bgColorIndex = 0;
-      #if defined (USE_EXT_LCD)||defined(_M5STICKCPLUS)||defined(_M5ATOMS3)
+      #if defined (USE_EXT_LCD)||defined(_M5STICKCPLUS)||defined(_M5ATOMS3)||defined(_M5STACK)
       int drawIndex = 0;
       #endif
       m5lcd.startWrite();
@@ -271,7 +279,7 @@ void update_scrn_thread(void *pvParameters)
            canvas.fillRect((cy * 8) % 40, cx * 6, 8, 6, bgColor);
            fontPtr = &mz_font_6x8[(ch + fontOffset) * 6]; 
           #else
-            m5lcd.fillRect(cx * 8, cy * 8, 8, 8, bgColor);
+            canvas.fillRect(cx * 8, (cy * 8) % 40, 8, 8, bgColor);
           if (hw700.pcg700_mode == 0 || !(ch & 0x80)) {
               fontPtr = &mz_font[(ch + fontOffset) * 8];
           } else {
@@ -285,7 +293,7 @@ void update_scrn_thread(void *pvParameters)
           #if defined (USE_EXT_LCD)||defined(_M5STICKCPLUS)||defined(_M5ATOMS3)
             canvas.drawBitmap((cy * 8) % 40, cx * 6, fontPtr, 8, 6, fgColor);
           #else
-           m5lcd.drawBitmap(cx * 8, cy * 8, fontPtr, 8, 8, fgColor);
+           canvas.drawBitmap(cx * 8, (cy * 8) %40 , fontPtr, 8, 8, fgColor);
           #endif
         }
         #if defined (USE_EXT_LCD) 
@@ -342,6 +350,11 @@ void update_scrn_thread(void *pvParameters)
                      (40 * drawIndex)*0.55 + 7  // Y座標
                     };
           canvas.pushAffineWithAA(matrix);
+          drawIndex = drawIndex + 1;
+        }
+        #elif defined(_M5STACK)
+          if((cy+1)%5 == 0){
+          canvas.pushSprite(0, 40 * drawIndex); 
           drawIndex = drawIndex + 1;
         }
         #endif

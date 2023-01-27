@@ -82,10 +82,12 @@ void setup() {
      m5lcd.setRotation(2);
   }
   #endif
+  #if !defined(_M5STACK)
   if (!SPIFFS.begin()) { 
     Serial.println("SPIFFS Mount Failed");
     return;
   }
+  #endif
   mzConfig.enableSound = false; //起動時はサウンドOFF
 
 

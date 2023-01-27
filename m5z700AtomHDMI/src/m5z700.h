@@ -92,8 +92,13 @@ enum MSGQID
   QID_KBD = 1001,
 };
 
+#if defined(_M5STACK)
+#define ROM_DIRECTORY "/MZROM"
+#define TAPE_DIRECTORY "/MZROM/MZTAPE"
+#else
 #define ROM_DIRECTORY ""
 #define TAPE_DIRECTORY ""
+#endif
 //#define DEFAULT_ROM_FILE  "1Z009.ROM"
 #if defined(USE_EXT_LCD)
 #if !defined(USE_ST7735S)
@@ -115,14 +120,20 @@ enum MSGQID
 #define LEDC_BASE_FREQ     5000
 // SPEAKER PIN
 #ifdef USE_SPEAKER_G25
+//SPEAKER_TEST
+#if defined(_M5ATOMS3)
+#define SPEAKER_PIN        2
+#else
 #define SPEAKER_PIN        25
+#endif
 #endif
 #ifdef USE_SPEAKER_G26
 #define SPEAKER_PIN        26
 #endif
 
-
 #if defined(_M5STICKCPLUS)
-//#define SPEAKER_PIN        25
+#define SPEAKER_PIN        25
 #endif
+
+
 #endif

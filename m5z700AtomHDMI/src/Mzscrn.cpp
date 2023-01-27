@@ -12,6 +12,8 @@
 #include <M5StickCPlus.h>
 #elif defined(_M5ATOMS3)
 #include <M5Unified.h>
+#elif defined(_M5STACK)
+#include <M5Stack.h>
 #else
 #include <M5Atom.h>  
 #endif
@@ -132,7 +134,11 @@ int font_load(const char *fontfile)
 
   String romDir = ROM_DIRECTORY;
   String fontFile = DEFAULT_FONT_FILE;
+  #if defined(_M5STACK)
+  File dataFile = SD.open(romDir + "/" + fontFile, FILE_READ);
+  #else
   File dataFile = SPIFFS.open(romDir + "/" + fontFile, FILE_READ);
+  #endif
   if (!dataFile) {
     Serial.println("FONT FILE NOT FOUNT");
     perror("Open font file");

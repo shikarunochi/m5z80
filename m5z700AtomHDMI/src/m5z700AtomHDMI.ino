@@ -16,6 +16,8 @@
 #elif defined(_M5ATOMS3)
 #include <M5Unified.h>
 #include<Wire.h>
+#elif defined(_M5STACK)
+#include <M5Stack.h>
 #else
 #include <M5Atom.h>  
 #endif
@@ -31,6 +33,8 @@
 #if defined(_M5STICKCPLUS)
 M5GFX m5lcd;
 #elif defined(_M5ATOMS3)
+M5GFX m5lcd;
+#elif defined(_M5STACK)
 M5GFX m5lcd;
 #else
 #ifdef USE_EXT_LCD
@@ -54,6 +58,9 @@ void setup() {
   Wire.begin(2,1);
   m5lcd = M5.Display;
   m5lcd.setRotation(0);
+  #elif (_M5STACK)
+  M5.begin(false,true,true,true); 
+  m5lcd.begin();
   #else
   //M5AtomLite
   M5.begin(true,false,true); 

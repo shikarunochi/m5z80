@@ -6,6 +6,9 @@
 #include <M5StickCPlus.h>
 #elif defined(_M5ATOMS3)
 #include <M5Unified.h>
+#elif defined(_M5STACK)
+#include <M5GFX.h>
+#include <M5Stack.h>
 #else
 #include <M5Atom.h>  
 #define LGFX_M5STACK     
@@ -107,6 +110,8 @@ extern LGFX m5lcd;
 #if defined(_M5STICKCPLUS)
 extern M5GFX  m5lcd;
 #elif defined(_M5ATOMS3)
+extern M5GFX m5lcd;
+#elif defined(_M5STACK)
 extern M5GFX m5lcd;
 #else
 

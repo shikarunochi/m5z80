@@ -13,10 +13,14 @@
 #if defined(_M5STICKCPLUS)
 #include <M5GFX.h>
 #include <M5StickCPlus.h>
+#elif defined(_M5STACK)
+#include <M5Stack.h>
+#include <M5GFX.h>
 #elif defined(_M5ATOMS3)
 #include <M5Unified.h>
 #include <Wire.h>
 //USBキーボード
+//https://github.com/touchgadget/esp32-usb-host-demos
 #include <elapsedMillis.h>
 #include <usb/usb_host.h>
 #include "usbhhelp.hpp"
@@ -200,7 +204,7 @@ typedef struct KBDMSG_t {
   unsigned char msg[80];
 } KBDMSG;
 
-#if defined(_M5STICKCPLUS)||defined(_M5ATOMS3)
+#if defined(_M5STICKCPLUS)||defined(_M5ATOMS3)||defined(_M5STACK)
 #else
 CRGB dispColor(uint8_t g, uint8_t r, uint8_t b) {
   return (CRGB)((g << 16) | (r << 8) | b);
@@ -761,13 +765,19 @@ void monrom_load(void)
   String romPath = String(ROM_DIRECTORY) + "/" + romFile;
   Serial.println("ROM PATH:" + romPath);
 
+  #if defined(_M5STACK)
+  if (SD.exists(romPath) == false) {
+  #else
   if (SPIFFS.exists(romPath) == false) {
+  #endif
     m5lcd.println("ROM FILE NOT EXIST");
     m5lcd.printf("[%s]", romPath);
   }
-
+  #if defined(_M5STACK)
+  File dataFile = SD.open(romPath, FILE_READ);
+  #else
   File dataFile = SPIFFS.open(romPath, FILE_READ);
-
+  #endif
   int offset = 0;
   if (dataFile) {
     while (dataFile.available()) {
@@ -864,7 +874,7 @@ int mz80c_main()
   #if defined(_M5ATOMS3)
   usbh_setup(show_config_desc_full);
   #endif
-  #if defined(_M5STICKCPLUS)||defined(_M5ATOMS3)
+  #if defined(_M5STICKCPLUS)||defined(_M5ATOMS3)||defined(_M5STACK)
   #else
   M5.dis.drawpix(0, dispColor(50,0,0));
   #endif
@@ -987,7 +997,7 @@ void mainloop(void)
       if(btKeyboardConnect == false){
         btKeyboardConnect = true;
         //接続したらLEDを緑に。
-        #if defined(_M5STICKCPLUS)||defined(_M5ATOMS3)
+        #if defined(_M5STICKCPLUS)||defined(_M5ATOMS3)||defined(_M5STACK)
         #else
         M5.dis.drawpix(0, dispColor(0,50,0));
         #endif
@@ -1034,6 +1044,8 @@ void mainloop(void)
     //}
     #if defined(_M5STICKCPLUS)
     if (M5.BtnB.wasReleased()) {
+    #elif defined(_M5STACK)
+    if (M5.BtnC.wasReleased()) {
     #elif defined(_M5ATOMS3)
     if (M5.BtnA.pressedFor(1000)) {
       while(M5.BtnA.wasReleased()==false){ //離されるのを待つ
@@ -1054,6 +1066,8 @@ void mainloop(void)
       set_scren_update_valid_flag(true);
     #if defined(_M5STICKCPLUS)||defined(_M5ATOMS3)
     }else if (M5.BtnA.wasReleased()) {
+    #elif defined(_M5STACK)
+    }else if (M5.BtnB.wasReleased()) {
     #else
     }else if (M5.Btn.wasReleased()) {
     #endif
@@ -1522,9 +1536,12 @@ String selectMzt() {
 
   m5lcd.fillScreen(TFT_BLACK);
   m5lcd.setCursor(0, 0);
+  #if defined(_M5STACK)
+  m5lcd.setTextSize(2);
+  #else
   m5lcd.setTextSize(1);
-
-  String fileDir = "/"; 
+  #endif
+  String fileDir = TAPE_DIRECTORY; 
   /*
   if (fileDir.endsWith("/") == true)
   {
@@ -1539,7 +1556,11 @@ String selectMzt() {
     return "";
   }
   */
+  #if defined(_M5STACK)
+  fileRoot = SD.open(fileDir);
+  #else
   fileRoot = SPIFFS.open(fileDir);
+  #endif
   int fileListCount = 0;
 
   while (1)
@@ -1582,7 +1603,7 @@ String selectMzt() {
   int preStartIndex = 0;
   bool isLongPress = false;
   bool isButtonLongPress = false;
-  #if defined(_M5STICKCPLUS)
+  #if defined(_M5STICKCPLUS)||(_M5STACK)
   int dispfileCount = 12;
   #elif defined(_M5ATOMS3)||defined(USE_ST7735S)
   int dispfileCount = 15;
@@ -1637,16 +1658,16 @@ String selectMzt() {
         }
       }
       m5lcd.setTextColor(TFT_WHITE);
-/*
+
+  #if defined(_M5STICKCPLUS)
+      m5lcd.drawString("LONG PRESS:SELECT", 0, 135 - 17, 1);
+  #elif defined(_M5STACK)
       m5lcd.drawRect(0, 240 - 19, 100, 18, TFT_WHITE);
       m5lcd.drawCentreString("U P", 53, 240 - 17, 1);
       m5lcd.drawRect(110, 240 - 19, 100, 18, TFT_WHITE);
       m5lcd.drawCentreString("SELECT", 159, 240 - 17, 1);
       m5lcd.drawRect(220, 240 - 19, 100, 18, TFT_WHITE);
       m5lcd.drawCentreString("DOWN", 266, 240 - 17, 1);
-*/
-  #if defined(_M5STICKCPLUS)
-      m5lcd.drawString("LONG PRESS:SELECT", 0, 135 - 17, 1);
   #else
       m5lcd.drawString("LONG PRESS:SELECT", 0, 200 - 17, 1);
   #endif
@@ -1683,6 +1704,9 @@ String selectMzt() {
     //    needRedraw = true;
     //  }
     //}
+    #if defined(_M5STACK)
+    //長押し選択無し
+    #else
     #if defined(_M5STICKCPLUS)||defined(_M5ATOMS3)
     if(M5.BtnA.pressedFor(1000)){ //長押しになった場合色を変える
     #else
@@ -1693,8 +1717,11 @@ String selectMzt() {
             needRedraw = true;
       }
     }
+    #endif
     #if defined(_M5STICKCPLUS)
     if (M5.BtnA.wasReleasefor(1000))
+    #elif defined(_M5STACK)
+    if (M5.BtnB.wasReleased())
     #elif defined(_M5ATOMS3)
     if (M5.BtnA.wasReleased() && isButtonLongPress == true)
     #else
@@ -1759,6 +1786,8 @@ String selectMzt() {
       }
     #if defined(_M5STICKCPLUS)||defined(_M5ATOMS3)
     }else if (M5.BtnA.wasReleased()){
+    #elif defined(_M5STACK)
+    }else if (M5.BtnC.wasReleased()){
     #else
     }else if (M5.Btn.wasReleased()){
     #endif
@@ -1768,17 +1797,20 @@ String selectMzt() {
         selectIndex = 0;
       }
       needRedraw = true;
-    #if defined(_M5STICKCPLUS)
+    #if defined(_M5STICKCPLUS)||defined(_M5STACK)
+    #if defined(_M5STACK)
+    }else if (M5.BtnA.wasReleased()){
+    #else
     }else if (M5.BtnB.wasReleased()){
+    #endif
       selectIndex--;
       if (selectIndex < 0)
       {
         selectIndex = fileListCount-1;
       }
       needRedraw = true;
-    #endif
-
     }
+    #endif
     delay(100);
   }
 }
@@ -1812,8 +1844,11 @@ int setMztToMemory(String mztFile) {
     mem[ROM_START+L_TMPEX+1] = (addr >> 8);
     Z80_Reset();
   */
-
+ #if defined(_M5STACK)
+  File fd = SD.open(filePath, FILE_READ);
+ #else
   File fd = SPIFFS.open(filePath, FILE_READ);
+#endif
   Serial.println("fileOpen");
   if (fd == NULL)
   {
@@ -2017,7 +2052,11 @@ void systemMenu()
   delay(10);
   m5lcd.fillScreen(TFT_BLACK);
   delay(10);
+  #if defined(_M5STACK)
+  m5lcd.setTextSize(2);
+  #else
   m5lcd.setTextSize(1);
+  #endif
   bool needRedraw = true;
 
   int menuItemCount = 0;
@@ -2074,20 +2113,23 @@ void systemMenu()
 */
         m5lcd.println(curItem);
       }
-/*
       m5lcd.setTextColor(TFT_WHITE);
+      #if defined(_M5STACK)
       m5lcd.drawRect(0, 240 - 19, 100, 18, TFT_WHITE);
       m5lcd.drawCentreString("U P", 53, 240 - 17, 1);
       m5lcd.drawRect(110, 240 - 19, 100, 18, TFT_WHITE);
       m5lcd.drawCentreString("SELECT", 159, 240 - 17, 1);
       m5lcd.drawRect(220, 240 - 19, 100, 18, TFT_WHITE);
       m5lcd.drawCentreString("DOWN", 266, 240 - 17, 1);
-*/
-      m5lcd.setTextColor(TFT_WHITE);
+      #else
       m5lcd.drawString("LONG PRESS:SELECT", 0, 200 - 17, 1);
+      #endif
       needRedraw = false;
     }
     M5.update();
+  #if defined(_M5STACK)
+  //長押し無し
+  #else
   #if defined(_M5STICKCPLUS)||defined(_M5ATOMS3)
     if(M5.BtnA.pressedFor(1000)){ //長押しになった場合色を変える
   #else
@@ -2098,18 +2140,22 @@ void systemMenu()
            needRedraw = true;
       }
     }
-
-    //if (M5.BtnA.wasReleased())
-    //{
-    //  selectIndex--;
-    //  if (selectIndex < 0)
-    //  {
-    //    selectIndex = menuItemCount - 1;
-    //  }
-    //  needRedraw = true;
-    //}
+  #endif
+  #if defined(_M5STACK)
+    if (M5.BtnA.wasReleased())
+    {
+      selectIndex--;
+      if (selectIndex < 0)
+      {
+        selectIndex = menuItemCount - 1;
+      }
+      needRedraw = true;
+    }
+  #endif
   #if defined(_M5STICKCPLUS)
     if (M5.BtnA.wasReleasefor(1000))
+  #elif defined(_M5STACK)
+  if (M5.BtnB.wasReleased())
   #elif defined(_M5ATOMS3)
     if (M5.BtnA.wasReleased() && isButtonLongPress == true)
   #else
@@ -2182,6 +2228,8 @@ void systemMenu()
       isButtonLongPress = false;
     #if defined(_M5STICKCPLUS)||defined(_M5ATOMS3)
     }else if (M5.BtnA.wasReleased()) {
+    #elif defined(_M5STACK)
+    }else if (M5.BtnC.wasReleased()) {
     #else
     }else if (M5.Btn.wasReleased()) {
     #endif
@@ -2310,10 +2358,17 @@ static bool saveMZTImage(){
   m5lcd.setCursor(0,0);
   m5lcd.println("SAVE MZT IMAGE");
   File saveFile;
-   if (mzConfig.mzMode == MZMODE_80) {
+  String romDir = ROM_DIRECTORY;
+  if (mzConfig.mzMode == MZMODE_80) {
+  #if defined(_M5STACK)  
+      saveFile = SD.open(romDir + "/0_M5Z80MEM.MZT", FILE_WRITE);
+  }else{
+      saveFile = SD.open(romDir + "/0_M5Z700MEM.MZT", FILE_WRITE);
+  #else
       saveFile = SPIFFS.open("/0_M5Z80MEM.MZT", FILE_WRITE);
   }else{
       saveFile = SPIFFS.open("/0_M5Z700MEM.MZT", FILE_WRITE);
+  #endif
   }
   if(saveFile == false){
     return false;
@@ -2363,7 +2418,7 @@ static bool saveMZTImage(){
   delay(2000);
   return true;
 }
-
+#if defined(_M5ATOMS3)
 void keyboard_transfer_cb(usb_transfer_t *transfer)
 {
   if (Device_Handle == transfer->device_handle) {
@@ -2431,4 +2486,4 @@ void prepare_endpoint(const void *p)
     ESP_LOGI("", "Ignoring interrupt Out endpoint");
   }
 }
-
+#endif

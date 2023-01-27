@@ -17,6 +17,8 @@
 #include <M5StickCPlus.h>
 #elif defined(_M5ATOMS3)
 #include <M5Unified.h>
+#elif defined(_M5STACK)
+#include <M5Stack.h>
 #else
 #include <M5Atom.h>  
 #endif
@@ -132,9 +134,15 @@ int set_mztData(String mztFile)
   filePath += "/" + mztFile;
 
   Serial.println(filePath);
-  
+  #if defined(_M5STACK)
+  File fd = SD.open(filePath, FILE_READ);
+  String tmpTapeDataFilePath = TAPE_DIRECTORY;
+  tmpTapeDataFilePath += "/tmpMZTapeData";
+  File tmpTapeData = SD.open(tmpTapeDataFilePath, FILE_WRITE);
+  #else
   File fd = SPIFFS.open(filePath, FILE_READ);
   File tmpTapeData = SPIFFS.open("/tmpTapeData", FILE_WRITE);
+  #endif
   tapeReadBufCount = 0;
   Serial.println("fileOpen");
 	if(fd == NULL)
@@ -825,7 +833,13 @@ int cmt_read(void)
 		preTword = tword;
 		if(readTword <= tword){
 			bufStartTword = readTword;
+			#if defined(_M5STACK)
+			String tmpTapeDataFilePath = TAPE_DIRECTORY;
+  			tmpTapeDataFilePath += "/tmpMZTapeData";
+			File tmpTapeData = SD.open(tmpTapeDataFilePath, FILE_READ);
+			#else
 			File tmpTapeData = SPIFFS.open("/tmpTapeData", FILE_READ);
+			#endif
 			tmpTapeData.seek(readTword * 4,SeekSet);
 			//char data[400];
 			int readDataCount = tmpTapeData.readBytes(tapeDataSaveBuf,1600);

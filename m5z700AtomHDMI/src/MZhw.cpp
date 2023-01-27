@@ -678,7 +678,7 @@ void play8253(void)
     //Serial.println(freqtmp);
     //M5.Speaker.mute();
     //M5.Speaker.tone(freqtmp);
-    //if(mzConfig.enableSound){
+    if(mzConfig.enableSound){
 	#if defined(USE_SPEAKER_G25)||defined(USE_SPEAKER_G26)||defined(_M5STICKCPLUS)
 	if(freqtmp > 0){
 		ledcWriteTone(LEDC_CHANNEL_0, 1000000 / freqtmp);
@@ -687,7 +687,7 @@ void play8253(void)
 	}
 	//ledcWriteTone(LEDC_CHANNEL_0, 500000 / freqtmp);
 	#endif
-    //}
+    }
     //Serial.print("PLAY:");
     //Serial.println(1000000 / freqtmp);
 	}

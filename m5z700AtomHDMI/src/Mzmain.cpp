@@ -2021,10 +2021,11 @@ int setMztToMemory(String mztFile) {
   return true;
 }
 
-#define SET_TO_MEMORY_INDEX 5
-#define SAVE_IMAGE_INDEX 6
-#define WONDER_HOUSE_MODE_INDEX 7
-#define PCG_OR_ROTATE_LCD_INDEX 8
+#define SOUND_INDEX 5
+#define SET_TO_MEMORY_INDEX 6
+#define SAVE_IMAGE_INDEX 7
+#define WONDER_HOUSE_MODE_INDEX 8
+#define PCG_OR_ROTATE_LCD_INDEX 9
 
 void systemMenu()
 {
@@ -2035,6 +2036,7 @@ void systemMenu()
     "RESET:NEW MONITOR",
     "RESET:MZ-1Z009",
     "RESET:SP-1002",
+    "SOUND",
     "SET MZT TO MEMORY",
     "SAVE MZT Image",
     "Wonder House Mode",
@@ -2097,10 +2099,11 @@ void systemMenu()
           curItem = curItem + ((hw700.pcg700_mode == 1) ? String(": ON") : String(": OFF"));
         #endif
         }
-/*
-        if (index == SOUNT_INDEX) {
+
+        if (index == SOUND_INDEX) {
           curItem = curItem + (mzConfig.enableSound ? String(": ON") : String(": OFF"));
         }
+/*        
         if (index == LCD_INDEX) {
           if (lcdMode == 0) {
             curItem = curItem + ":INTERNAL";
@@ -2181,6 +2184,9 @@ void systemMenu()
           break;
         case 4:
           strcpy(mzConfig.romFile, "SP-1002.ROM");
+          break;
+        case SOUND_INDEX:
+          mzConfig.enableSound = !mzConfig.enableSound;
           break;
         case SET_TO_MEMORY_INDEX:
           firstLoadFlag = !firstLoadFlag;

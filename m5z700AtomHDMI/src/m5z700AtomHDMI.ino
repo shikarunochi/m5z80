@@ -18,6 +18,7 @@
 #include<Wire.h>
 #elif defined(_M5STACK)
 #include <M5Stack.h>
+#include <M5StackUpdater.h>  // https://github.com/tobozo/M5Stack-SD-Updater/
 #else
 #include <M5Atom.h>  
 #endif
@@ -61,6 +62,11 @@ void setup() {
   #elif (_M5STACK)
   M5.begin(false,true,true,true); 
   m5lcd.begin();
+  if(digitalRead(BUTTON_A_PIN) == 0) {
+     Serial.println("Will Load menu binary");
+     updateFromFS(SD);
+     ESP.restart();
+  }
   #else
   //M5AtomLite
   M5.begin(true,false,true); 

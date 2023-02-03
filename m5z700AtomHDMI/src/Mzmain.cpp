@@ -1541,7 +1541,7 @@ int checkI2cKeyboard() {
       case 190: //Fn + B
         i2cKeyCode = 0x0B; //かな 
         break;
-        
+
       case 175: //ESC
         sendBreakFlag = true; //うまくキーコード処理できなかったのでWebからのBreak送信扱いにします。
         return 0;
@@ -1866,6 +1866,8 @@ String selectMzt() {
         selectIndex = fileListCount-1;
       }
       needRedraw = true;
+    }
+    #else
     }
     #endif
     delay(100);

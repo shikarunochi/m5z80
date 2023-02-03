@@ -159,6 +159,7 @@ void checkJoyPad();
 //int buttonBpin = 36; //青ボタン
 
 #define CARDKB_ADDR 0x5F
+#define FACES_KB_ADDR 0x08
 int checkI2cKeyboard();
 int checkSerialKey();
 int keyCheckCount;
@@ -1440,10 +1441,18 @@ void checkJoyPad() {
 //--------------------------------------------------------------
 int checkI2cKeyboard() {
   uint8_t i2cKeyCode = 0;
-
+  bool facesFlag = false;
   if (Wire.requestFrom(CARDKB_ADDR, 1)) { // request 1 byte from keyboard
     while (Wire.available()) {
       i2cKeyCode = Wire.read();                  // receive a byte as
+      break;
+    }
+  }
+
+  if (Wire.requestFrom(FACES_KB_ADDR, 1)) { // request 1 byte from keyboard
+    while (Wire.available()) {
+      i2cKeyCode = Wire.read();                  // receive a byte as
+      facesFlag = true;
       break;
     }
   }
@@ -1455,42 +1464,90 @@ int checkI2cKeyboard() {
   //Serial.println(i2cKeyCode, HEX);
 
   //特殊キー
-  switch (i2cKeyCode) {
-    case 0xB5:
-      i2cKeyCode = 0x12;  //UP
-      break;
-    case 0xB6:
-      i2cKeyCode = 0x11;  //DOWN
-      break;
-    case 0xB7:
-      i2cKeyCode = 0x13;  //RIGHT
-      break;
-    case 0xB4:
-      i2cKeyCode = 0x14;  //LEFT
-      break;
-    case 0x99: //Fn + UP
-      i2cKeyCode = 0x15;  //HOME
-      break;
-    case 0xA4: //Fn + Down
-      i2cKeyCode = 0x16;  //END -> CLR
-      break;
-    case 0xA5:  //Fn + Right
-      i2cKeyCode = 0x18;  //INST
-      break;
-    case 0x08: //BS
-      i2cKeyCode = 0x17;
-      break;
-    case 0x8C: //Fn + Tab
-      i2cKeyCode = 0x0A; //記号モード 0x0A に記号ボタンを割り当てている。（TABには英数ボタン割り当て。）
-      break;
-    case 0x8B: //Fn + BS
-      i2cKeyCode = 0x0B; //かなモード 0x0B にかなボタンを割り当てている。
-      break;
-    case 0x1B: //ESC
-      sendBreakFlag = true; //うまくキーコード処理できなかったのでWebからのBreak送信扱いにします。
-      return 0;
-    default:
-      break;
+  if(facesFlag == false){
+    switch (i2cKeyCode) {
+      case 0xB5:
+        i2cKeyCode = 0x12;  //UP
+        break;
+      case 0xB6:
+        i2cKeyCode = 0x11;  //DOWN
+        break;
+      case 0xB7:
+        i2cKeyCode = 0x13;  //RIGHT
+        break;
+      case 0xB4:
+        i2cKeyCode = 0x14;  //LEFT
+        break;
+      case 0x99: //Fn + UP
+        i2cKeyCode = 0x15;  //HOME
+        break;
+      case 0xA4: //Fn + Down
+        i2cKeyCode = 0x16;  //END -> CLR
+        break;
+      case 0xA5:  //Fn + Right
+        i2cKeyCode = 0x18;  //INST
+        break;
+      case 0x08: //BS
+        i2cKeyCode = 0x17;
+        break;
+      case 0x8C: //Fn + Tab
+        i2cKeyCode = 0x0A; //記号モード 0x0A に記号ボタンを割り当てている。（TABには英数ボタン割り当て。）
+        break;
+      case 0x8B: //Fn + BS
+        i2cKeyCode = 0x0B; //かなモード 0x0B にかなボタンを割り当てている。
+        break;
+      case 0x1B: //ESC
+        sendBreakFlag = true; //うまくキーコード処理できなかったのでWebからのBreak送信扱いにします。
+        return 0;
+      default:
+        break;
+    }
+  }else{
+    //参考
+    //https://github.com/m5stack/FACES-Firmware/blob/master/KeyBoard.ino
+    switch (i2cKeyCode) {
+      case 183:
+        i2cKeyCode = 0x12;  //UP
+        break;
+      case 193:
+        i2cKeyCode = 0x13;  //DOWN
+        break;
+      case 192:
+        i2cKeyCode = 0x11;  //RIGHT
+        break;
+      case 191:
+        i2cKeyCode = 0x14;  //LEFT
+        break;
+      case 187: 
+        i2cKeyCode = 0x15;  //HOME
+        break;
+      case 188: 
+        i2cKeyCode = 0x16;  //END -> CLR
+        break;
+      case 184: 
+        i2cKeyCode = 0x18;  //INST
+        break;
+      case 0x08: //BS
+        i2cKeyCode = 0x17;
+        break;
+
+      //TODO:MZ-700でしか有効になりません
+      case 186: //TAB
+        i2cKeyCode = 0x09; //英数
+        break;
+      case 189: //Fn + V
+        i2cKeyCode = 0x0A; //記号 
+        break;
+      case 190: //Fn + B
+        i2cKeyCode = 0x0B; //かな 
+        break;
+        
+      case 175: //ESC
+        sendBreakFlag = true; //うまくキーコード処理できなかったのでWebからのBreak送信扱いにします。
+        return 0;
+      default:
+        break;
+    }
   }
   return i2cKeyCode;
 

@@ -4,6 +4,7 @@ MZ80K/C and MZ-700 Emulator m5z700 for M5Stack,M5StickC Plus,M5Atom + ExtLCD,M5A
 
 M5Stack:
 https://shikarunochi.matrix.jp/?p=2713
+https://shikarunochi.matrix.jp/?p=2984
 
 M5StickC Plus:
 https://shikarunochi.matrix.jp/?p=4939

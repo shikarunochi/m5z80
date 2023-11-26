@@ -15,10 +15,13 @@
 #if defined(_M5STICKCPLUS)
 #include <M5GFX.h>
 #include <M5StickCPlus.h>
-#elif defined(_M5ATOMS3)
+#elif defined(_M5ATOMS3)||defined(_M5ATOMS3LITE)
 #include <M5Unified.h>
 #elif defined(_M5STACK)
 #include <M5Stack.h>
+#elif defined(_M5CARDPUTER)
+#include <M5Cardputer.h>
+#include <SD.h>
 #else
 #include <M5Atom.h>  
 #endif
@@ -134,7 +137,7 @@ int set_mztData(String mztFile)
   filePath += "/" + mztFile;
 
   Serial.println(filePath);
-  #if defined(_M5STACK)
+  #if defined(_M5STACK)||defined(_M5CARDPUTER)
   File fd = SD.open(filePath, FILE_READ);
   String tmpTapeDataFilePath = TAPE_DIRECTORY;
   tmpTapeDataFilePath += "/tmpMZTapeData";
@@ -667,7 +670,10 @@ void play8253(void)
     //M5.Speaker.mute();
 	#if defined(USE_SPEAKER_G25)||defined(USE_SPEAKER_G26)||defined(_M5STICKCPLUS)
     ledcWriteTone(LEDC_CHANNEL_0, 0); // stop the tone playing:
-	#endif	
+	#endif
+	#if defined(_M5CARDPUTER)
+	M5Cardputer.Speaker.stop();
+	#endif
 	}
 	else
 	if (freqtmp>=0) {
@@ -685,8 +691,16 @@ void play8253(void)
 	}else{
 		ledcWriteTone(LEDC_CHANNEL_0, 0);
 	}
-	//ledcWriteTone(LEDC_CHANNEL_0, 500000 / freqtmp);
 	#endif
+
+	#if defined(_M5CARDPUTER)
+	if(freqtmp > 0){
+			M5Cardputer.Speaker.tone(freqtmp);
+	}else{
+			M5Cardputer.Speaker.stop();
+	}
+	#endif
+	//ledcWriteTone(LEDC_CHANNEL_0, 500000 / freqtmp);
     }
     //Serial.print("PLAY:");
     //Serial.println(1000000 / freqtmp);
@@ -698,6 +712,9 @@ void play8253(void)
     //M5.Speaker.mute();
 	#if defined(USE_SPEAKER_G25)||defined(USE_SPEAKER_G26)||defined(_M5STICKCPLUS)
     ledcWriteTone(LEDC_CHANNEL_0, 0); // stop the tone playing:
+	#endif
+	#if defined(_M5CARDPUTER)
+			M5Cardputer.Speaker.stop();
 	#endif
 	}
 }
@@ -833,7 +850,7 @@ int cmt_read(void)
 		preTword = tword;
 		if(readTword <= tword){
 			bufStartTword = readTword;
-			#if defined(_M5STACK)
+			#if defined(_M5STACK)||defined(_M5CARDPUTER)
 			String tmpTapeDataFilePath = TAPE_DIRECTORY;
   			tmpTapeDataFilePath += "/tmpMZTapeData";
 			File tmpTapeData = SD.open(tmpTapeDataFilePath, FILE_READ);

@@ -10,10 +10,12 @@
 #if defined(_M5STICKCPLUS)
 #include <M5GFX.h>
 #include <M5StickCPlus.h>
-#elif defined(_M5ATOMS3)
+#elif defined(_M5ATOMS3)||defined(_M5ATOMS3LITE)
 #include <M5Unified.h>
 #elif defined(_M5STACK)
 #include <M5Stack.h>
+#elif defined(_M5CARDPUTER)
+#include <M5Cardputer.h>
 #else
 #include <M5Atom.h>  
 #endif
@@ -54,7 +56,11 @@ uint16_t c_bright;
 LGFX_Sprite canvas(&m5lcd);
 #endif
 
-#if defined(_M5STICKCPLUS)||defined(_M5ATOMS3)
+#if defined(_M5CARDPUTER)
+#include <SD.h>
+#endif
+
+#if defined(_M5STICKCPLUS)||defined(_M5ATOMS3)||defined(_M5CARDPUTER)
 #include "mzfont6x8.h"
 M5Canvas canvas(&m5lcd);
 #endif
@@ -93,7 +99,7 @@ int mz_screen_init(void)
   canvas.setTextSize(1);
   canvas.createSprite(40,240); //メモリ足りないので縦40ドット（=5行）に分割して5回に分けて描画する。8x6フォントを90度横向きで描画した後、90度回転させてpushする。
   #endif
-  #if defined(_M5STICKCPLUS)
+  #if defined(_M5STICKCPLUS)||defined(_M5CARDPUTER)
   m5lcd.setRotation(1);
   canvas.setColorDepth(8);
   canvas.setTextSize(1);
@@ -131,7 +137,7 @@ void set_scren_update_valid_flag(boolean flag){
 */
 int font_load(const char *fontfile)
 {
-  #if defined (USE_EXT_LCD)||defined(_M5STICKCPLUS)||defined(_M5ATOMS3)
+  #if defined (USE_EXT_LCD)||defined(_M5STICKCPLUS)||defined(_M5ATOMS3)||defined(_M5CARDPUTER)
     Serial.println("USE INTERNAL FONT DATA");
     return 0;
   #endif
@@ -142,7 +148,7 @@ int font_load(const char *fontfile)
 
   String romDir = ROM_DIRECTORY;
   String fontFile = DEFAULT_FONT_FILE;
-  #if defined(_M5STACK)
+  #if defined(_M5STACK)||defined(_M5CARDPUTER)
   File dataFile = SD.open(romDir + "/" + fontFile, FILE_READ);
   #else
   File dataFile = SPIFFS.open(romDir + "/" + fontFile, FILE_READ);
@@ -238,7 +244,7 @@ void update_scrn_thread(void *pvParameters)
       bgColor = 0;
       fgColorIndex = 0;
       bgColorIndex = 0;
-      #if defined (USE_EXT_LCD)||defined(_M5STICKCPLUS)||defined(_M5ATOMS3)||defined(_M5STACK)
+      #if defined (USE_EXT_LCD)||defined(_M5STICKCPLUS)||defined(_M5ATOMS3)||defined(_M5STACK)||defined(_M5CARDPUTER)
       int drawIndex = 0;
       #endif
       m5lcd.startWrite();
@@ -275,7 +281,7 @@ void update_scrn_thread(void *pvParameters)
             bgColor = c_dark;
           }
           //fb.drawBitmap(cx * 8, cy * 8, (const uint8_t *)((hw700.pcg700_mode == 0) ? mz_font[ch * 8] : pcg700_font[ch * 8]), 8, 8, fgColor);
-          #if defined (USE_EXT_LCD)||defined(_M5STICKCPLUS)||defined(_M5ATOMS3)
+          #if defined (USE_EXT_LCD)||defined(_M5STICKCPLUS)||defined(_M5ATOMS3)||defined(_M5CARDPUTER)
            canvas.fillRect((cy * 8) % 40, cx * 6, 8, 6, bgColor);
            fontPtr = &mz_font_6x8[(ch + fontOffset) * 6]; 
           #else
@@ -290,25 +296,15 @@ void update_scrn_thread(void *pvParameters)
             }
           }
           #endif
-          #if defined (USE_EXT_LCD)||defined(_M5STICKCPLUS)||defined(_M5ATOMS3)
+          #if defined (USE_EXT_LCD)||defined(_M5STICKCPLUS)||defined(_M5ATOMS3)||defined(_M5CARDPUTER)
             canvas.drawBitmap((cy * 8) % 40, cx * 6, fontPtr, 8, 6, fgColor);
           #else
            canvas.drawBitmap(cx * 8, (cy * 8) %40 , fontPtr, 8, 8, fgColor);
           #endif
         }
         #if defined (USE_EXT_LCD) 
-        #if !defined(USE_ST7735S) //外部液晶＆240x240の場合、縮小せずに表示
-        if((cy+1)%5 == 0){
-          if(lcdRotate == 0){
-            canvas.pushRotateZoom(120, 40 * drawIndex + 20,90,1,-1); 
-          }else{
-            //canvas.pushRotateZoomWithAA(120, (40 * drawIndex + 40)*0.85,90,0.85,-1); //表示位置の 微調整は、各自のLCDに合わせてください
-            canvas.pushRotateZoom(120, 40 * drawIndex + 20,90,1,-1); 
-          }
-          drawIndex = drawIndex + 1;
-        }
-        #else //USE_ST7735S 160x128液晶
-        if((cy+1)%5 == 0){
+        #if defined(USE_ST7735S) //USE_ST7735S 160x128液晶
+                if((cy+1)%5 == 0){
           //6x8ドットフォント使用＆縦横方向60%縮小
           //真ん中のドットが標準位置になるため、わざと奇数ドットになるように縮小する
           //canvas.pushRotateZoomWithAA(120*0.55 + 10, (40 * drawIndex)*0.55+ 20,90,0.5583,-0.575); 
@@ -326,11 +322,36 @@ void update_scrn_thread(void *pvParameters)
 
           drawIndex = drawIndex + 1;
         }
+        #elif defined(USE_GC9107)
+        if((cy+1)%5 == 0){ //128x128
+          //6x8ドットフォント使用＆縦横方向60%縮小
+          //pushAffineWithAAを使えば、中心位置指定ではないのでキレイに表示できる。
+          float matrix[6] = {0,   // 横倍
+                     0.55,  // 横傾き
+                    0, // X座標
+                     0.50,   // 縦傾き
+                    0,   // 縦倍
+                     (40 * drawIndex)*0.50 + 7  // Y座標
+                    };
+          canvas.pushAffineWithAA(matrix);
+          drawIndex = drawIndex + 1;
+        }
+        #else //外部液晶＆240x240の場合、縮小せずに表示
+        if((cy+1)%5 == 0){
+          if(lcdRotate == 0){
+            canvas.pushRotateZoom(120, 40 * drawIndex + 20,90,1,-1); 
+          }else{
+            //canvas.pushRotateZoomWithAA(120, (40 * drawIndex + 40)*0.85,90,0.85,-1); //表示位置の 微調整は、各自のLCDに合わせてください
+            canvas.pushRotateZoom(120, 40 * drawIndex + 20,90,1,-1); 
+          }
+          drawIndex = drawIndex + 1;
+        }
         #endif
-        #elif defined(_M5STICKCPLUS)
+        #elif defined(_M5STICKCPLUS)||defined(_M5CARDPUTER)
         if((cy+1)%5 == 0){
           //6x8ドットフォント使用＆縦方向70%縮小
-          canvas.pushRotateZoomWithAA(120, (40 * drawIndex + 20)*0.7,90,0.7,-1); 
+          //canvas.pushRotateZoomWithAA(120, (40 * drawIndex + 20)*0.7,90,0.7,-1); 
+          canvas.pushRotateZoomWithAA(120, (40 * drawIndex + 20)*0.67,90,0.67,-1); 
           drawIndex = drawIndex + 1;
         }
         #elif defined(_M5ATOMS3)
@@ -366,7 +387,7 @@ void update_scrn_thread(void *pvParameters)
           m5lcd.fillRect(0, 190, 240, 90, TFT_BLACK);
           m5lcd.setCursor(0, 190);
           m5lcd.print(statusAreaMessage);
-        #elif defined(_M5STICKCPLUS)
+        #elif defined(_M5STICKCPLUS)||defined(_M5CARDPUTER)
           m5lcd.setTextColor(TFT_WHITE);
           m5lcd.setTextSize(1);
           m5lcd.fillRect(0, 122, 240, 10, TFT_BLACK);

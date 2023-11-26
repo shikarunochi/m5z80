@@ -13,12 +13,19 @@
 #if defined(_M5STICKCPLUS)
 #include <M5GFX.h>
 #include <M5StickCPlus.h>
-#elif defined(_M5ATOMS3)
+#elif defined(_M5ATOMS3)||defined(_M5ATOMS3LITE)
 #include <M5Unified.h>
 #include<Wire.h>
 #elif defined(_M5STACK)
 #include <M5Stack.h>
 #include <M5StackUpdater.h>  // https://github.com/tobozo/M5Stack-SD-Updater/
+#elif defined(_M5CARDPUTER)
+#include <SD.h>
+#include "M5Cardputer.h"
+#include <SPI.h>
+#include <M5StackUpdater.h>	
+SPIClass SPI2;
+#define KEY_FN         0xff
 #else
 #include <M5Atom.h>  
 #endif
@@ -37,6 +44,13 @@ M5GFX m5lcd;
 M5GFX m5lcd;
 #elif defined(_M5STACK)
 M5GFX m5lcd;
+#elif defined(_M5STAMP)
+Button extBtn = Button(18, true, 10);
+LGFX m5lcd;
+#elif  defined(_M5CARDPUTER)
+#include <Wire.h>
+
+M5GFX m5lcd;
 #else
 #ifdef USE_EXT_LCD
 LGFX m5lcd;
@@ -52,14 +66,18 @@ void setup() {
   #if defined(_M5STICKCPLUS)
   M5.begin(false,true,true); 
   Wire.begin(32,33);
+  m5lcd.init();
   #elif defined(_M5ATOMS3)
   auto cfg = M5.config();
   cfg.internal_imu=false;
   M5.begin(cfg);
-  Wire.begin(2,1);
+  //Wire.begin(2,1,100000UL);
+  Wire.begin(2,1,400000UL);
+  //Wire.begin(2,1,40000000UL);
+  
   m5lcd = M5.Display;
   m5lcd.setRotation(0);
-  #elif (_M5STACK)
+  #elif defined(_M5STACK)
   M5.begin(false,true,true,true); 
   m5lcd.begin();
   if(digitalRead(BUTTON_A_PIN) == 0) {
@@ -67,6 +85,45 @@ void setup() {
      updateFromFS(SD);
      ESP.restart();
   }
+  #elif defined(_M5ATOMS3LITE)
+  auto cfg = M5.config();
+  cfg.internal_imu=false;
+  M5.begin(cfg);
+  Wire.begin(2,1,100000UL);
+  m5lcd.init();
+  #elif defined(_M5STAMP)
+  M5.begin(true,false,true); 
+  Wire.begin(32,33);
+  m5lcd.init();
+  extBtn.read(); //extBtn 状態を一度クリアする
+  #elif defined(_M5CARDPUTER)
+  auto cfg = M5.config();
+  M5Cardputer.begin(cfg, true);
+
+  SPI2.begin(
+     M5.getPin(m5::pin_name_t::sd_spi_sclk),
+     M5.getPin(m5::pin_name_t::sd_spi_miso),
+     M5.getPin(m5::pin_name_t::sd_spi_mosi),
+     M5.getPin(m5::pin_name_t::sd_spi_ss)
+   );
+  while (false == SD.begin(M5.getPin(m5::pin_name_t::sd_spi_ss),SPI2)) {
+    delay(500);
+  }
+  
+  M5Cardputer.update();
+    
+  if (M5Cardputer.Keyboard.isKeyPressed('a')) {
+      Serial.println("Will Load menu binary");
+      updateFromFS(SD,"/menu.bin");
+      ESP.restart();
+  }
+
+  //Wire.begin(2,1,400000UL);  
+  m5lcd = M5Cardputer.Display;
+  m5lcd.init();
+  m5lcd.setRotation(1);
+  M5Cardputer.Speaker.begin();
+  USBSerial.begin(11520);
   #else
   //M5AtomLite
   M5.begin(true,false,true); 
@@ -76,24 +133,30 @@ void setup() {
   m5lcd.init();
   #endif
   
-  //m5lcd.init();
-
   Serial.println("MAIN_START");
   
-  #if !defined(_M5STICKCPLUS)
+  #if !defined(_M5STICKCPLUS) && !defined(_M5STAMP)
   if(digitalRead(39) == 0) { //M5Atom Button
      Serial.println("RoteteMode:for extCRT");
-     //strcpy(mzConfig.romFile, "1Z009.ROM"); MZ-700 MODE
+     strcpy(mzConfig.romFile, "1Z009.ROM"); //MZ-700 MODE
      lcdRotate = 1;
-     m5lcd.setRotation(2);
+     //m5lcd.setRotation(2);
   }
   #endif
-  #if !defined(_M5STACK)
+
+  #if defined(_M5STAMP)
+  if(digitalRead(18) == 0) { //
+     strcpy(mzConfig.romFile, "1Z009.ROM"); //MZ-700 MODE
+  }
+
+  #endif
+  #if !defined(_M5STACK)&& !defined(_M5CARDPUTER)
   if (!SPIFFS.begin()) { 
     Serial.println("SPIFFS Mount Failed");
     return;
   }
   #endif
+
   mzConfig.enableSound = false; //起動時はサウンドOFF
 
 

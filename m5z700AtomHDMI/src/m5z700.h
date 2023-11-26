@@ -92,7 +92,7 @@ enum MSGQID
   QID_KBD = 1001,
 };
 
-#if defined(_M5STACK)
+#if defined(_M5STACK)||defined(_M5CARDPUTER)
 #define ROM_DIRECTORY "/MZROM"
 #define TAPE_DIRECTORY "/MZROM/MZTAPE"
 #else
@@ -107,7 +107,8 @@ enum MSGQID
 #define DEFAULT_ROM_FILE  "1Z009.ROM"
 #endif
 #else
-#define DEFAULT_ROM_FILE  "NEWMON7.ROM"
+//#define DEFAULT_ROM_FILE  "NEWMON7.ROM"
+#define DEFAULT_ROM_FILE  "1Z009.ROM"
 #endif
 #define DEFAULT_TAPE_FILE  "WH_newmon.mzt"
 #define DEFAULT_FONT_FILE  "MZ700FON.JP"
@@ -123,6 +124,8 @@ enum MSGQID
 //SPEAKER_TEST
 #if defined(_M5ATOMS3)
 #define SPEAKER_PIN        2
+#elif defined(_M5ATOMS3LITE)
+#define SPEAKER_PIN        38
 #else
 #define SPEAKER_PIN        25
 #endif

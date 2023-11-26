@@ -16,7 +16,7 @@
 #elif defined(_M5STACK)
 #include <M5Stack.h>
 #include <M5GFX.h>
-#elif defined(_M5ATOMS3)
+#elif defined(_M5ATOMS3)||(_M5ATOMS3LITE)
 #include <M5Unified.h>
 #include <Wire.h>
 //USBキーボード
@@ -90,6 +90,10 @@ void show_config_desc_full(const usb_config_desc_t *config_desc)
     }
   }
 }
+#elif defined(_M5CARDPUTER)
+#include <M5Cardputer.h>
+#include <Wire.h>
+#include <SD.h>
 #else
 #include <M5Atom.h>  
 #endif
@@ -162,6 +166,9 @@ void checkJoyPad();
 #define FACES_KB_ADDR 0x08
 int checkI2cKeyboard();
 int checkSerialKey();
+#if defined(_M5CARDPUTER)
+int checkCardputerKeyboard();
+#endif
 int keyCheckCount;
 int preKeyCode;
 bool inputStringMode;
@@ -205,7 +212,7 @@ typedef struct KBDMSG_t {
   unsigned char msg[80];
 } KBDMSG;
 
-#if defined(_M5STICKCPLUS)||defined(_M5ATOMS3)||defined(_M5STACK)
+#if defined(_M5STICKCPLUS)||defined(_M5ATOMS3)||defined(_M5ATOMS3LITE)||defined(_M5STACK)||defined(_M5CARDPUTER)
 #else
 CRGB dispColor(uint8_t g, uint8_t r, uint8_t b) {
   return (CRGB)((g << 16) | (r << 8) | b);
@@ -676,7 +683,7 @@ int mz_alloc_mem(void)
   //mem = (UINT8*)ps_malloc(64*1024);
   //mem = (UINT8*)ps_malloc((4 + 6 + 4 + 64) * 1024);
   mem = (UINT8*)malloc((4 + 6 + 4 + 64) * 1024);
-
+  
   if (mem == NULL)
   {
     return -1;
@@ -701,7 +708,7 @@ int mz_alloc_mem(void)
 
   /* ROM FONT */
   //mz_font = (uint8_t*)ps_malloc(ROMFONT_SIZE);
-  #if defined (USE_EXT_LCD)||defined(_M5STICKCPLUS)
+  #if defined (USE_EXT_LCD)||defined(_M5STICKCPLUS)||defined(_M5CARDPUTER)
   #else
   mz_font = (uint8_t*)malloc(ROMFONT_SIZE);
   if (mz_font == NULL)
@@ -766,7 +773,7 @@ void monrom_load(void)
   String romPath = String(ROM_DIRECTORY) + "/" + romFile;
   Serial.println("ROM PATH:" + romPath);
 
-  #if defined(_M5STACK)
+  #if defined(_M5STACK)||defined(_M5CARDPUTER)
   if (SD.exists(romPath) == false) {
   #else
   if (SPIFFS.exists(romPath) == false) {
@@ -774,7 +781,7 @@ void monrom_load(void)
     m5lcd.println("ROM FILE NOT EXIST");
     m5lcd.printf("[%s]", romPath);
   }
-  #if defined(_M5STACK)
+  #if defined(_M5STACK)||defined(_M5CARDPUTER)
   File dataFile = SD.open(romPath, FILE_READ);
   #else
   File dataFile = SPIFFS.open(romPath, FILE_READ);
@@ -872,10 +879,10 @@ int mz80c_main()
   m5lcd.println("HID START"); 
   #endif
   btKeyboardConnect = false;
-  #if defined(_M5ATOMS3)
+  #if defined(_M5ATOMS3)||defined(_M5ATOMS3LITE)
   usbh_setup(show_config_desc_full);
   #endif
-  #if defined(_M5STICKCPLUS)||defined(_M5ATOMS3)||defined(_M5STACK)
+  #if defined(_M5STICKCPLUS)||defined(_M5ATOMS3)||defined(_M5STACK)||defined(_M5ATOMS3LITE)||defined(_M5CARDPUTER)
   #else
   M5.dis.drawpix(0, dispColor(50,0,0));
   #endif
@@ -895,7 +902,7 @@ int mz80c_main()
   serialKeyCode = 0;
 
   sendBreakFlag = false;
-
+    
   //pinMode(buttonApin, INPUT_PULLUP);
   //pinMode(buttonBpin, INPUT_PULLUP);
   joyPadPushed_U = false;
@@ -912,6 +919,8 @@ int mz80c_main()
   inputStringMode = false;
 
   firstLoadFlag = true;
+  
+  wonderHouseMode = false;
 
   Serial.println("Screen init:Start");
   mz_screen_init();
@@ -984,7 +993,13 @@ void mainloop(void)
 
     scrn_draw(); 
 
-#ifndef USE_SPEAKER_G26
+#ifdef _M5CARDPUTER
+    M5Cardputer.update();
+#else
+    M5.update();
+#endif
+
+#if !defined(USE_SPEAKER_G26)|| defined(_M5STAMP)
     //M5Atomでスピーカーピンに G26使った場合、GROVE WIRE と排他
     keyCheck();
 #endif
@@ -998,7 +1013,7 @@ void mainloop(void)
       if(btKeyboardConnect == false){
         btKeyboardConnect = true;
         //接続したらLEDを緑に。
-        #if defined(_M5STICKCPLUS)||defined(_M5ATOMS3)||defined(_M5STACK)
+        #if defined(_M5STICKCPLUS)||defined(_M5ATOMS3)||defined(_M5ATOMS3LITE)||defined(_M5STACK)
         #else
         M5.dis.drawpix(0, dispColor(0,50,0));
         #endif
@@ -1009,7 +1024,7 @@ void mainloop(void)
           gui_hid(buf,n);
     }
 #endif
-#if defined(_M5ATOMS3)
+#if defined(_M5ATOMS3)||defined(_M5ATOMS3LITE)
   usbh_task();
 
   if (isKeyboardReady && !isKeyboardPolling && (KeyboardTimer > KeyboardInterval)) {
@@ -1022,7 +1037,8 @@ void mainloop(void)
     KeyboardTimer = 0;
   }
 #endif
-    M5.update();
+
+
 
     //if(M5.Btn.wasPressed()){
     //  setMztToMemory("S-BASIC.MZT");
@@ -1047,12 +1063,22 @@ void mainloop(void)
     if (M5.BtnB.wasReleased()) {
     #elif defined(_M5STACK)
     if (M5.BtnC.wasReleased()) {
-    #elif defined(_M5ATOMS3)
+    #elif defined(_M5ATOMS3)||defined(_M5ATOMS3LITE)
     if (M5.BtnA.pressedFor(1000)) {
       while(M5.BtnA.wasReleased()==false){ //離されるのを待つ
         M5.update();
         delay(100);
       }
+    #elif defined(_M5STAMP)
+    extBtn.read();
+    if (extBtn.wasReleasefor(1000)) {
+    #elif defined(_M5CARDPUTER)
+      if (M5Cardputer.BtnA.pressedFor(1000)) {
+      while(M5Cardputer.BtnA.wasReleased()==false){ //離されるのを待つ
+        M5.update();
+        delay(100);
+      }
+      
     #else
     if (M5.Btn.wasReleasefor(1000)) {
     #endif
@@ -1065,10 +1091,14 @@ void mainloop(void)
       m5lcd.fillScreen(TFT_BLACK);
       suspendScrnThreadFlag = false;
       set_scren_update_valid_flag(true);
-    #if defined(_M5STICKCPLUS)||defined(_M5ATOMS3)
+    #if defined(_M5STICKCPLUS)||defined(_M5ATOMS3)||defined(_M5ATOMS3LITE)
     }else if (M5.BtnA.wasReleased()) {
     #elif defined(_M5STACK)
     }else if (M5.BtnB.wasReleased()) {
+    #elif defined(_M5STAMP)
+    }else if(extBtn.wasReleased()){
+    #elif defined(_M5CARDPUTER)
+    }else if (M5Cardputer.BtnA.wasReleased()) { 
     #else
     }else if (M5.Btn.wasReleased()) {
     #endif
@@ -1194,7 +1224,10 @@ void keyCheck() {
   }
 
   char inKeyCode = 0;
-  checkJoyPad();
+
+  #ifndef _M5CARDPUTER //Cardputer は I2C使わなくしておく
+    checkJoyPad();
+  #endif
 
   //特別扱いのキー（ジョイパッドボタン用）
   bool ctrlFlag = false;
@@ -1219,13 +1252,21 @@ void keyCheck() {
 
   if (ctrlFlag == false && shiftFlag == false) {
     //キー入力
+//M5Stampではシリアル入力無視する
+#ifndef _M5STAMP
     if (inKeyCode == 0) {
       inKeyCode = checkSerialKey();
     }
+#endif
+#ifndef _M5CARDPUTER //Cardputer は I2C使わなくしておく
     if (inKeyCode == 0) {
       inKeyCode = checkI2cKeyboard();
     }
-
+#else
+    if (inKeyCode == 0) {
+      inKeyCode = checkCardputerKeyboard();
+    }
+#endif
     if (inKeyCode == 0 && wonderHouseMode == true) {
       inKeyCode = wonderHouseKey();
     }
@@ -1439,7 +1480,14 @@ void checkJoyPad() {
 //--------------------------------------------------------------
 // I2C Keyboard Logic
 //--------------------------------------------------------------
+int i2cCheckCount = 0;
 int checkI2cKeyboard() {
+  //I2C frequency が 40000000 → 100000UL になったので頻度を下げる
+  i2cCheckCount++;
+  if(i2cCheckCount < 50){
+    return 0;
+  }
+  i2cCheckCount = 0;
   uint8_t i2cKeyCode = 0;
   bool facesFlag = false;
   if (Wire.requestFrom(CARDKB_ADDR, 1)) { // request 1 byte from keyboard
@@ -1448,7 +1496,6 @@ int checkI2cKeyboard() {
       break;
     }
   }
-
   if (Wire.requestFrom(FACES_KB_ADDR, 1)) { // request 1 byte from keyboard
     while (Wire.available()) {
       i2cKeyCode = Wire.read();                  // receive a byte as
@@ -1456,7 +1503,6 @@ int checkI2cKeyboard() {
       break;
     }
   }
-
   if (i2cKeyCode == 0) {
     return 0;
   }
@@ -1553,6 +1599,48 @@ int checkI2cKeyboard() {
 
 }
 
+#if defined(_M5CARDPUTER)
+String data = "";
+Keyboard_Class::KeysState cardputerKeyStatus;
+int checkCardputerKeyboard(){
+
+    if (M5Cardputer.Keyboard.isChange()) {
+      
+        if (M5Cardputer.Keyboard.isPressed()) {
+            cardputerKeyStatus = M5Cardputer.Keyboard.keysState();
+              if(cardputerKeyStatus.enter){
+                return 0x0D;
+              }
+              if(cardputerKeyStatus.del){
+                return  0x17;
+              }
+              if(cardputerKeyStatus.space){
+                return 0x20;
+              }
+              if(cardputerKeyStatus.values.empty()==false){
+              for (auto i : cardputerKeyStatus.values) { //最初の1文字だけ返す TODO:Status によって色々やる必要ありそう
+                    //Fnが押下されていた場合
+                    if(cardputerKeyStatus.fn){
+                      switch (i){
+                    // , 左
+                      case ',':return 0x14;
+                    // ; 上
+                      case ';':return 0x12;
+                    // / 右
+                      case '/':return 0x13;
+                    // . 下
+                      case '.':return 0x11;
+                      }
+                    }
+                    //USBSerial.println(i);
+                    return i;
+              }            
+              }
+        }
+    }
+    return 0;
+}
+#endif
 long wonderHouseKeyDelayMillis = 0;
 
 
@@ -1588,6 +1676,9 @@ String selectMzt() {
 	#if defined(USE_SPEAKER_G25)||defined(USE_SPEAKER_G26)||defined(_M5STICKCPLUS)
     ledcWriteTone(LEDC_CHANNEL_0, 0); // stop the tone playing:
 	#endif	
+  #if defined(_M5CARDPUTER)
+    M5Cardputer.Speaker.stop();
+  #endif
   File fileRoot;
   String fileList[MAX_FILES];
 
@@ -1613,10 +1704,10 @@ String selectMzt() {
     return "";
   }
   */
-  #if defined(_M5STACK)
+  #if defined(_M5STACK)||defined(_M5CARDPUTER)
   fileRoot = SD.open(fileDir);
   #else
-  fileRoot = SPIFFS.open(fileDir);
+  fileRoot = SPIFFS.open(fileDir + "/");
   #endif
   int fileListCount = 0;
 
@@ -1660,10 +1751,12 @@ String selectMzt() {
   int preStartIndex = 0;
   bool isLongPress = false;
   bool isButtonLongPress = false;
-  #if defined(_M5STICKCPLUS)||(_M5STACK)
+  #if defined(_M5STICKCPLUS)||(_M5STACK)||(_M5CARDPUTER)
   int dispfileCount = 12;
   #elif defined(_M5ATOMS3)||defined(USE_ST7735S)
   int dispfileCount = 15;
+  #elif defined(USE_GC9107)
+  int dispfileCount = 10;
   #else
   int dispfileCount = 21;
   #endif
@@ -1764,8 +1857,13 @@ String selectMzt() {
     #if defined(_M5STACK)
     //長押し選択無し
     #else
-    #if defined(_M5STICKCPLUS)||defined(_M5ATOMS3)
+    #if defined(_M5STICKCPLUS)||defined(_M5ATOMS3)||defined(_M5ATOMS3LITE)
     if(M5.BtnA.pressedFor(1000)){ //長押しになった場合色を変える
+    #elif defined(_M5STAMP)
+    extBtn.read();
+    if (extBtn.pressedFor(1000)) {
+    #elif defined(_M5CARDPUTER)
+    if(M5Cardputer.BtnA.pressedFor(1000)){
     #else
     if(M5.Btn.pressedFor(1000)){ //長押しになった場合色を変える
     #endif
@@ -1779,8 +1877,12 @@ String selectMzt() {
     if (M5.BtnA.wasReleasefor(1000))
     #elif defined(_M5STACK)
     if (M5.BtnB.wasReleased())
-    #elif defined(_M5ATOMS3)
+    #elif defined(_M5ATOMS3)||defined(_M5ATOMS3LITE)
     if (M5.BtnA.wasReleased() && isButtonLongPress == true)
+    #elif defined(_M5STAMP)
+    if (extBtn.wasReleasefor(1000)) 
+    #elif defined(_M5CARDPUTER)
+    if(M5Cardputer.BtnA.wasReleased() && isButtonLongPress == true)
     #else
     if (M5.Btn.wasReleasefor(1000))
     #endif
@@ -1841,10 +1943,14 @@ String selectMzt() {
           }
         //}
       }
-    #if defined(_M5STICKCPLUS)||defined(_M5ATOMS3)
+    #if defined(_M5STICKCPLUS)||defined(_M5ATOMS3)||defined(_M5ATOMS3LITE)
     }else if (M5.BtnA.wasReleased()){
     #elif defined(_M5STACK)
     }else if (M5.BtnC.wasReleased()){
+    #elif defined(_M5STAMP)
+    }else if(extBtn.wasReleased()){
+    #elif defined(_M5CARDPUTER)
+    }else if (M5Cardputer.BtnA.wasReleased()){ //TODO:
     #else
     }else if (M5.Btn.wasReleased()){
     #endif
@@ -1903,7 +2009,7 @@ int setMztToMemory(String mztFile) {
     mem[ROM_START+L_TMPEX+1] = (addr >> 8);
     Z80_Reset();
   */
- #if defined(_M5STACK)
+ #if defined(_M5STACK)||defined(_M5CARDPUTER)
   File fd = SD.open(filePath, FILE_READ);
  #else
   File fd = SPIFFS.open(filePath, FILE_READ);
@@ -2099,7 +2205,7 @@ void systemMenu()
     "SET MZT TO MEMORY",
     "SAVE MZT Image",
     "Wonder House Mode",
-  #if defined (USE_EXT_LCD)||defined(_M5ATOMS3)
+  #if defined (USE_EXT_LCD)||defined(_M5ATOMS3)||defined(_M5ATOMS3LITE)
     "Rotate LCD",
   #elif defined(_M5STICKCPLUS)
   #else
@@ -2110,6 +2216,10 @@ void systemMenu()
 	#if defined(USE_SPEAKER_G25)||defined(USE_SPEAKER_G26)||defined(_M5STICKCPLUS)
     ledcWriteTone(LEDC_CHANNEL_0, 0); // stop the tone playing:
 	#endif	
+  #if defined(_M5CARDPUTER)
+    M5Cardputer.Speaker.stop();
+  #endif
+
   delay(10);
   m5lcd.fillScreen(TFT_BLACK);
   delay(10);
@@ -2162,6 +2272,10 @@ void systemMenu()
         if (index == SOUND_INDEX) {
           curItem = curItem + (mzConfig.enableSound ? String(": ON") : String(": OFF"));
         }
+        if (index == WONDER_HOUSE_MODE_INDEX){
+          curItem = curItem + (wonderHouseMode?": ON":": OFF");
+        }
+
 /*        
         if (index == LCD_INDEX) {
           if (lcdMode == 0) {
@@ -2192,8 +2306,13 @@ void systemMenu()
   #if defined(_M5STACK)
   //長押し無し
   #else
-  #if defined(_M5STICKCPLUS)||defined(_M5ATOMS3)
+  #if defined(_M5STICKCPLUS)||defined(_M5ATOMS3)||defined(_M5ATOMS3LITE)
     if(M5.BtnA.pressedFor(1000)){ //長押しになった場合色を変える
+  #elif defined(_M5STAMP)
+    extBtn.read();
+    if (extBtn.pressedFor(1000)) {
+  #elif defined(_M5CARDPUTER)
+    if(M5Cardputer.BtnA.pressedFor(1000)){
   #else
     if(M5.Btn.pressedFor(1000)){ //長押しになった場合色を変える
   #endif
@@ -2218,8 +2337,12 @@ void systemMenu()
     if (M5.BtnA.wasReleasefor(1000))
   #elif defined(_M5STACK)
   if (M5.BtnB.wasReleased())
-  #elif defined(_M5ATOMS3)
+  #elif defined(_M5ATOMS3)||defined(_M5ATOMS3LITE)
     if (M5.BtnA.wasReleased() && isButtonLongPress == true)
+  #elif defined(_M5STAMP)
+    if(extBtn.wasReleasefor(1000))
+  #elif defined(_M5CARDPUTER)
+    if(M5Cardputer.BtnA.wasReleased() && isButtonLongPress == true) 
   #else
     if (M5.Btn.wasReleasefor(1000))
   #endif
@@ -2254,8 +2377,12 @@ void systemMenu()
           saveMZTImage();
           break;
         case WONDER_HOUSE_MODE_INDEX:
-          wonderHouseMode = true;
-          wonderHouseKeyIndex = 0;
+          if(wonderHouseMode == false){
+            wonderHouseMode = true;
+            wonderHouseKeyIndex = 0;
+          }else{
+            wonderHouseMode = false;
+          }
           break;
         case PCG_OR_ROTATE_LCD_INDEX:
         #if defined (USE_EXT_LCD)||defined(_M5ATOMS3)
@@ -2291,10 +2418,14 @@ void systemMenu()
       m5lcd.setCursor(0, 0);
       needRedraw = true;
       isButtonLongPress = false;
-    #if defined(_M5STICKCPLUS)||defined(_M5ATOMS3)
+    #if defined(_M5STICKCPLUS)||defined(_M5ATOMS3)||defined(_M5ATOMS3LITE)
     }else if (M5.BtnA.wasReleased()) {
     #elif defined(_M5STACK)
     }else if (M5.BtnC.wasReleased()) {
+    #elif defined(_M5STAMP)
+    }else if (extBtn.wasReleased()) {
+    #elif defined(_M5CARDPUTER)
+    } else if(M5Cardputer.BtnA.wasReleased()){
     #else
     }else if (M5.Btn.wasReleased()) {
     #endif
@@ -2425,7 +2556,7 @@ static bool saveMZTImage(){
   File saveFile;
   String romDir = ROM_DIRECTORY;
   if (mzConfig.mzMode == MZMODE_80) {
-  #if defined(_M5STACK)  
+  #if defined(_M5STACK) ||defined(_M5CARDPUTER)
       saveFile = SD.open(romDir + "/0_M5Z80MEM.MZT", FILE_WRITE);
   }else{
       saveFile = SD.open(romDir + "/0_M5Z700MEM.MZT", FILE_WRITE);
@@ -2483,7 +2614,7 @@ static bool saveMZTImage(){
   delay(2000);
   return true;
 }
-#if defined(_M5ATOMS3)
+#if defined(_M5ATOMS3)||defined(_M5ATOMS3LITE)
 void keyboard_transfer_cb(usb_transfer_t *transfer)
 {
   if (Device_Handle == transfer->device_handle) {

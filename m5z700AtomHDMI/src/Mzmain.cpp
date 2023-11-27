@@ -1617,8 +1617,8 @@ int checkCardputerKeyboard(){
               if(cardputerKeyStatus.space){
                 return 0x20;
               }
-              if(cardputerKeyStatus.values.empty()==false){
-              for (auto i : cardputerKeyStatus.values) { //最初の1文字だけ返す TODO:Status によって色々やる必要ありそう
+              if(cardputerKeyStatus.word.empty()==false){
+              for (auto i : cardputerKeyStatus.word) { //最初の1文字だけ返す TODO:Status によって色々やる必要ありそう
                     //Fnが押下されていた場合
                     if(cardputerKeyStatus.fn){
                       switch (i){

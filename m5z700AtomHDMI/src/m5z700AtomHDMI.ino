@@ -123,6 +123,7 @@ void setup() {
   m5lcd.init();
   m5lcd.setRotation(1);
   M5Cardputer.Speaker.begin();
+  M5Cardputer.Speaker.setVolume(64);
   USBSerial.begin(11520);
   #else
   //M5AtomLite

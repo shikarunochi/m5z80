@@ -154,7 +154,7 @@ int font_load(const char *fontfile)
   File dataFile = SPIFFS.open(romDir + "/" + fontFile, FILE_READ);
   #endif
   if (!dataFile) {
-    Serial.println("FONT FILE NOT FOUNT");
+    Serial.println("FONT FILE NOT FOUND");
     perror("Open font file");
     return -1;
   }

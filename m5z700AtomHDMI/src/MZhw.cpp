@@ -657,6 +657,10 @@ int pit_count(void)
 // 8253 SOUND
 /////////////////////////////////////////////////////////////////
 //
+#if defined(_M5CARDPUTER)
+int preFreqtmp = 0;
+#endif
+
 void play8253(void)
 {
 //	//int freq2,freqtmp;
@@ -695,9 +699,14 @@ void play8253(void)
 
 	#if defined(_M5CARDPUTER)
 	if(freqtmp > 0){
-			M5Cardputer.Speaker.tone(freqtmp);
+		if(M5Cardputer.Speaker.isPlaying()==false ||preFreqtmp != freqtmp){
+			if(preFreqtmp != freqtmp){
+				preFreqtmp = freqtmp;
+			}
+			M5Cardputer.Speaker.tone(1000000 / freqtmp, 1000, 1);
+		}
 	}else{
-			M5Cardputer.Speaker.stop();
+			M5Cardputer.Speaker.tone(0, 1000, 1);
 	}
 	#endif
 	//ledcWriteTone(LEDC_CHANNEL_0, 500000 / freqtmp);

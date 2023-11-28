@@ -16,14 +16,20 @@
 #elif defined(_M5STACK)
 #include <M5Stack.h>
 #include <M5GFX.h>
-#elif defined(_M5ATOMS3)||(_M5ATOMS3LITE)
+#elif defined(_M5ATOMS3)||(_M5ATOMS3LITE)||(_M5CARDPUTER)
+#if defined(_M5CARDPUTER)
+#include <M5Cardputer.h>
+#include <SD.h>
+#else
 #include <M5Unified.h>
-#include <Wire.h>
+#endif
 //USBキーボード
 //https://github.com/touchgadget/esp32-usb-host-demos
 #include <elapsedMillis.h>
 #include <usb/usb_host.h>
 #include "usbhhelp.hpp"
+#include <Wire.h>
+
 bool isKeyboard = false;
 bool isKeyboardReady = false;
 uint8_t KeyboardInterval;
@@ -90,10 +96,6 @@ void show_config_desc_full(const usb_config_desc_t *config_desc)
     }
   }
 }
-#elif defined(_M5CARDPUTER)
-#include <M5Cardputer.h>
-#include <Wire.h>
-#include <SD.h>
 #else
 #include <M5Atom.h>  
 #endif
@@ -147,7 +149,7 @@ extern "C" {
 #include "MZhw.h"
 #include "mzscrn.h"
 //#include "mzbeep.h"
-#include <WebServer.h>
+//#include <WebServer.h>
 //#include <WiFiMulti.h>
 
 static bool intFlag = false;
@@ -879,7 +881,7 @@ int mz80c_main()
   m5lcd.println("HID START"); 
   #endif
   btKeyboardConnect = false;
-  #if defined(_M5ATOMS3)||defined(_M5ATOMS3LITE)
+  #if defined(_M5ATOMS3)||defined(_M5ATOMS3LITE)||defined(_M5CARDPUTER)
   usbh_setup(show_config_desc_full);
   #endif
   #if defined(_M5STICKCPLUS)||defined(_M5ATOMS3)||defined(_M5STACK)||defined(_M5ATOMS3LITE)||defined(_M5CARDPUTER)
@@ -1024,9 +1026,9 @@ void mainloop(void)
           gui_hid(buf,n);
     }
 #endif
-#if defined(_M5ATOMS3)||defined(_M5ATOMS3LITE)
+#if defined(_M5ATOMS3)||defined(_M5ATOMS3LITE)||defined(_M5CARDPUTER)
   usbh_task();
-
+  
   if (isKeyboardReady && !isKeyboardPolling && (KeyboardTimer > KeyboardInterval)) {
     KeyboardIn->num_bytes = 8;
     esp_err_t err = usb_host_transfer_submit(KeyboardIn);
@@ -1618,23 +1620,23 @@ int checkCardputerKeyboard(){
                 return 0x20;
               }
               if(cardputerKeyStatus.word.empty()==false){
-              for (auto i : cardputerKeyStatus.word) { //最初の1文字だけ返す TODO:Status によって色々やる必要ありそう
-                    //Fnが押下されていた場合
-                    if(cardputerKeyStatus.fn){
-                      switch (i){
-                    // , 左
-                      case ',':return 0x14;
-                    // ; 上
-                      case ';':return 0x12;
-                    // / 右
-                      case '/':return 0x13;
-                    // . 下
-                      case '.':return 0x11;
+                for (auto i : cardputerKeyStatus.word) { //最初の1文字だけ返す TODO:Status によって色々やる必要ありそう
+                      //Fnが押下されていた場合
+                      if(cardputerKeyStatus.fn){
+                        switch (i){
+                      // , 左
+                        case ',':return 0x14;
+                      // ; 上
+                        case ';':return 0x12;
+                      // / 右
+                        case '/':return 0x13;
+                      // . 下
+                        case '.':return 0x11;
+                        }
                       }
-                    }
-                    //USBSerial.println(i);
-                    return i;
-              }            
+                      //USBSerial.println(i);
+                      return i;
+                }            
               }
         }
     }
@@ -1751,12 +1753,14 @@ String selectMzt() {
   int preStartIndex = 0;
   bool isLongPress = false;
   bool isButtonLongPress = false;
-  #if defined(_M5STICKCPLUS)||(_M5STACK)||(_M5CARDPUTER)
+  #if defined(_M5STICKCPLUS)||(_M5STACK)
   int dispfileCount = 12;
   #elif defined(_M5ATOMS3)||defined(USE_ST7735S)
   int dispfileCount = 15;
   #elif defined(USE_GC9107)
   int dispfileCount = 10;
+  #elif defined(_M5CARDPUTER)
+  int dispfileCount = 16;
   #else
   int dispfileCount = 21;
   #endif
@@ -2554,7 +2558,7 @@ static bool saveMZTImage(){
   m5lcd.setCursor(0,0);
   m5lcd.println("SAVE MZT IMAGE");
   File saveFile;
-  String romDir = ROM_DIRECTORY;
+  String romDir = TAPE_DIRECTORY;
   if (mzConfig.mzMode == MZMODE_80) {
   #if defined(_M5STACK) ||defined(_M5CARDPUTER)
       saveFile = SD.open(romDir + "/0_M5Z80MEM.MZT", FILE_WRITE);
@@ -2614,7 +2618,7 @@ static bool saveMZTImage(){
   delay(2000);
   return true;
 }
-#if defined(_M5ATOMS3)||defined(_M5ATOMS3LITE)
+#if defined(_M5ATOMS3)||defined(_M5ATOMS3LITE)||defined(_M5CARDPUTER)
 void keyboard_transfer_cb(usb_transfer_t *transfer)
 {
   if (Device_Handle == transfer->device_handle) {
@@ -2627,10 +2631,10 @@ void keyboard_transfer_cb(usb_transfer_t *transfer)
         keyData[1] = p[0];
         keyData[3] = p[2];
         
-        //M5.Display.setCursor(0,0);
-        //M5.Display.setTextColor(WHITE,BLACK);
-        //M5.Display.printf("HID report: %02x %02x %02x %02x %02x %02x %02x %02x",
-         //   p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7]);
+        //m5lcd.setCursor(0,0);
+        //m5lcd.setTextColor(WHITE,BLACK);
+        //m5lcd.printf("HID report: %02x %02x %02x %02x %02x %02x %02x %02x",
+        //    p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7]);
 
             keyboard(keyData,4);
 

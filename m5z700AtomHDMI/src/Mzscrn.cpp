@@ -352,6 +352,7 @@ void update_scrn_thread(void *pvParameters)
           //6x8ドットフォント使用＆縦方向70%縮小
           //canvas.pushRotateZoomWithAA(120, (40 * drawIndex + 20)*0.7,90,0.7,-1); 
           canvas.pushRotateZoomWithAA(120, (40 * drawIndex + 20)*0.67,90,0.67,-1); 
+          //canvas.pushRotateZoom(120, (40 * drawIndex + 20)*0.67,90,0.67,-1); 
           drawIndex = drawIndex + 1;
         }
         #elif defined(_M5ATOMS3)

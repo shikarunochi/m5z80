@@ -107,8 +107,8 @@ enum MSGQID
 #define DEFAULT_ROM_FILE  "1Z009.ROM"
 #endif
 #else
-//#define DEFAULT_ROM_FILE  "NEWMON7.ROM"
-#define DEFAULT_ROM_FILE  "1Z009.ROM"
+#define DEFAULT_ROM_FILE  "NEWMON7.ROM"
+//#define DEFAULT_ROM_FILE  "1Z009.ROM"
 #endif
 #define DEFAULT_TAPE_FILE  "WH_newmon.mzt"
 #define DEFAULT_FONT_FILE  "MZ700FON.JP"

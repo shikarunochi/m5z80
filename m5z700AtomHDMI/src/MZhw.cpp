@@ -137,11 +137,14 @@ int set_mztData(String mztFile)
   filePath += "/" + mztFile;
 
   Serial.println(filePath);
-  #if defined(_M5STACK)||defined(_M5CARDPUTER)
+  #if defined(_M5STACK)
   File fd = SD.open(filePath, FILE_READ);
   String tmpTapeDataFilePath = TAPE_DIRECTORY;
   tmpTapeDataFilePath += "/tmpMZTapeData";
   File tmpTapeData = SD.open(tmpTapeDataFilePath, FILE_WRITE);
+  #elif defined(_M5CARDPUTER)
+  File fd = SD.open(filePath, FILE_READ);
+  File tmpTapeData = SPIFFS.open("/tmpTapeData", FILE_WRITE);
   #else
   File fd = SPIFFS.open(filePath, FILE_READ);
   File tmpTapeData = SPIFFS.open("/tmpTapeData", FILE_WRITE);
@@ -288,7 +291,7 @@ int set_mztData(String mztFile)
 	flushTapeBuf(tmpTapeData);
 	tmpTapeData.close();
 	m5lcd.println("]");
-
+	delay(500);
   return true;
 }
 
@@ -810,7 +813,7 @@ int cmt_read(void)
 	{
 		return 0;
 	}
-
+	
 	// 時間経過からデータの位置を割り出す
 	elapsed = ts700.cpu_tstates - ts700.mzt_start;
 	elapsed += ts700.mzt_elapse;
@@ -854,12 +857,13 @@ int cmt_read(void)
 		sysst.tape = percent;
 		xferFlag |= SYST_CMT;
 	}
+	
 	// データ位置からビットの状態を取り出す
 	if(preTword != tword){
 		preTword = tword;
 		if(readTword <= tword){
 			bufStartTword = readTword;
-			#if defined(_M5STACK)||defined(_M5CARDPUTER)
+			#if defined(_M5STACK)
 			String tmpTapeDataFilePath = TAPE_DIRECTORY;
   			tmpTapeDataFilePath += "/tmpMZTapeData";
 			File tmpTapeData = SD.open(tmpTapeDataFilePath, FILE_READ);
@@ -879,6 +883,7 @@ int cmt_read(void)
 		tapeData = tapeDataBuf[tword - bufStartTword];
 	}
 	//if((mzt_buf[tword] << tbit) & 0x80000000)
+
 	if((tapeData << tbit) & 0x80000000)
 	{
 		return 0x20;

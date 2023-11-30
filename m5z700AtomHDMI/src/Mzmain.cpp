@@ -776,12 +776,22 @@ void monrom_load(void)
   Serial.println("ROM PATH:" + romPath);
 
   #if defined(_M5STACK)||defined(_M5CARDPUTER)
-  if (SD.exists(romPath) == false) {
+  if (SD.exists(romPath) == false) 
   #else
-  if (SPIFFS.exists(romPath) == false) {
+  if (SPIFFS.exists(romPath) == false) 
   #endif
-    m5lcd.println("ROM FILE NOT EXIST");
-    m5lcd.printf("[%s]", romPath);
+  {
+    romFile = DEFAULT_ROM_FILE;
+    romPath = String(ROM_DIRECTORY) + "/" + romFile;
+  #if defined(_M5STACK)||defined(_M5CARDPUTER)
+    if (SD.exists(romPath) == false) 
+  #else
+    if (SPIFFS.exists(romPath) == false) 
+  #endif
+    {
+      m5lcd.println("ROM FILE NOT EXIST");
+      m5lcd.printf("[%s]", romPath);
+    }
   }
   #if defined(_M5STACK)||defined(_M5CARDPUTER)
   File dataFile = SD.open(romPath, FILE_READ);
@@ -1028,7 +1038,7 @@ void mainloop(void)
 #endif
 #if defined(_M5ATOMS3)||defined(_M5ATOMS3LITE)||defined(_M5CARDPUTER)
   usbh_task();
-  
+
   if (isKeyboardReady && !isKeyboardPolling && (KeyboardTimer > KeyboardInterval)) {
     KeyboardIn->num_bytes = 8;
     esp_err_t err = usb_host_transfer_submit(KeyboardIn);
@@ -1039,8 +1049,6 @@ void mainloop(void)
     KeyboardTimer = 0;
   }
 #endif
-
-
 
     //if(M5.Btn.wasPressed()){
     //  setMztToMemory("S-BASIC.MZT");
@@ -1166,7 +1174,7 @@ int end_thread(void)
 
 void suspendScrnThread(bool flag) {
   suspendScrnThreadFlag = flag;
-  delay(100);
+  //delay(100);
 }
 
 //--------------------------------------------------------------

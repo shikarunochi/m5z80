@@ -151,16 +151,23 @@ void setup() {
   }
 
   #endif
-  #if !defined(_M5STACK)&& !defined(_M5CARDPUTER)
-  if (!SPIFFS.begin()) { 
-    Serial.println("SPIFFS Mount Failed");
-    return;
+  #if !defined(_M5STACK)
+  if (!SPIFFS.begin()) {
+    M5.Lcd.println("FORMATTING SPIFFS...");
+    if (!SPIFFS.begin(true)) {
+      M5.Lcd.println("SPIFFS Mount Failed");
+      Serial.println("SPIFFS Mount Failed");
+      return;
+    }
   }
   #endif
 
+#if defined(_M5CARDPUTER)
+  mzConfig.enableSound = true; //Cardputerは起動時はサウンドON
+  strcpy(mzConfig.romFile, "1Z009.ROM"); //MZ-700 MODE
+#else
   mzConfig.enableSound = false; //起動時はサウンドOFF
-
-
+#endif
   //Speaker Setup
 #if defined(USE_SPEAKER_G25)||defined(USE_SPEAKER_G26)||defined(_M5STICKCPLUS)
   ledcSetup(LEDC_CHANNEL_0, LEDC_BASE_FREQ, LEDC_TIMER_13_BIT);

@@ -122,6 +122,8 @@ void mz_exit(int);
 
 int setMztToMemory(String mztFile);
 
+void suspendScrnThread(bool flag) ;
+
 typedef struct
 {
   char romFile[50 + 1];

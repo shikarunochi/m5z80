@@ -16,6 +16,8 @@
 #elif defined(_M5STACK)
 #include <M5Stack.h>
 #include <M5GFX.h>
+#elif defined(_TOOTHBRUSH)
+#include <M5Unified.h>
 #elif defined(_M5ATOMS3)||(_M5ATOMS3LITE)||(_M5CARDPUTER)
 #if defined(_M5CARDPUTER)
 #include <M5Cardputer.h>
@@ -214,7 +216,7 @@ typedef struct KBDMSG_t {
   unsigned char msg[80];
 } KBDMSG;
 
-#if defined(_M5STICKCPLUS)||defined(_M5ATOMS3)||defined(_M5ATOMS3LITE)||defined(_M5STACK)||defined(_M5CARDPUTER)
+#if defined(_M5STICKCPLUS)||defined(_M5ATOMS3)||defined(_M5ATOMS3LITE)||defined(_M5STACK)||defined(_M5CARDPUTER)||defined(_TOOTHBRUSH)
 #else
 CRGB dispColor(uint8_t g, uint8_t r, uint8_t b) {
   return (CRGB)((g << 16) | (r << 8) | b);
@@ -894,7 +896,7 @@ int mz80c_main()
   #if defined(_M5ATOMS3)||defined(_M5ATOMS3LITE)||defined(_M5CARDPUTER)
   usbh_setup(show_config_desc_full);
   #endif
-  #if defined(_M5STICKCPLUS)||defined(_M5ATOMS3)||defined(_M5STACK)||defined(_M5ATOMS3LITE)||defined(_M5CARDPUTER)
+  #if defined(_M5STICKCPLUS)||defined(_M5ATOMS3)||defined(_M5STACK)||defined(_M5ATOMS3LITE)||defined(_M5CARDPUTER)||defined(_TOOTHBRUSH)
   #else
   M5.dis.drawpix(0, dispColor(50,0,0));
   #endif
@@ -908,9 +910,15 @@ int mz80c_main()
   m5lcd.println("CardKB: ENABLE");
   #endif
 
+  #if defined(USE_MIDI)
+  m5lcd.println("MIDI: ENABLE[PORT.C]");
+  #endif
+
   suspendScrnThreadFlag = false;
 
   c_bright = GREEN;
+  //c_bright = WHITE;
+
   serialKeyCode = 0;
 
   sendBreakFlag = false;
@@ -1007,6 +1015,8 @@ void mainloop(void)
 
 #ifdef _M5CARDPUTER
     M5Cardputer.update();
+#elif defined(_TOOTHBRUSH)
+  //なにもしない
 #else
     M5.update();
 #endif
@@ -1069,6 +1079,8 @@ void mainloop(void)
     //    Serial.println("TAPE CAN'T START");
     //  }
     //}
+  #if !defined(_TOOTHBRUSH)
+  //なにもしない
     #if defined(_M5STICKCPLUS)
     if (M5.BtnB.wasReleased()) {
     #elif defined(_M5STACK)
@@ -1122,7 +1134,7 @@ void mainloop(void)
       set_scren_update_valid_flag(true);
     }
 
-      
+  #endif    
     syncTmp = millis();
     if (synctime - (syncTmp - timeTmp) > 0) {
       delay(synctime - (syncTmp - timeTmp));
@@ -1375,6 +1387,10 @@ int checkSerialKey()
 //--------------------------------------------------------------
 
 void checkJoyPad() {
+#if defined(_TOOTHBRUSH)  
+  return;
+#else
+
   if (mzConfig.mzMode != MZMODE_700) {
     return;
   }
@@ -1486,12 +1502,16 @@ void checkJoyPad() {
   } else if (joyPadPushed_Press == true && joyPress == 0) {
     joyPadPushed_Press = false;
   }
+  #endif
 }
 //--------------------------------------------------------------
 // I2C Keyboard Logic
 //--------------------------------------------------------------
 int i2cCheckCount = 0;
 int checkI2cKeyboard() {
+  #if defined(_TOOTHBRUSH)
+  return 0;
+  #else
   //I2C frequency が 40000000 → 100000UL になったので頻度を下げる
   i2cCheckCount++;
   if(i2cCheckCount < 50){
@@ -1606,7 +1626,7 @@ int checkI2cKeyboard() {
     }
   }
   return i2cKeyCode;
-
+  #endif
 }
 
 #if defined(_M5CARDPUTER)
@@ -1683,12 +1703,18 @@ int wonderHouseKey(){
 }
 
 String selectMzt() {
+#if defined(_TOOTHBRUSH)
+  return "";
+#else
 	#if defined(USE_SPEAKER_G25)||defined(USE_SPEAKER_G26)||defined(_M5STICKCPLUS)
     ledcWriteTone(LEDC_CHANNEL_0, 0); // stop the tone playing:
 	#endif	
   #if defined(_M5CARDPUTER)
     M5Cardputer.Speaker.stop();
   #endif
+  #if defined(USE_MIDI)
+	synth.setAllNotesOff(0);
+	#endif
   File fileRoot;
   String fileList[MAX_FILES];
 
@@ -1696,6 +1722,8 @@ String selectMzt() {
   m5lcd.setCursor(0, 0);
   #if defined(_M5STACK)
   m5lcd.setTextSize(2);
+  #elif defined(_M5STAMP)||defined(USE_ST7789)
+  m5lcd.setTextSize(1);
   #else
   m5lcd.setTextSize(1);
   #endif
@@ -1763,6 +1791,8 @@ String selectMzt() {
   bool isButtonLongPress = false;
   #if defined(_M5STICKCPLUS)||(_M5STACK)
   int dispfileCount = 12;
+  #elif defined(_M5STAMP)||defined(USE_ST7789)
+  int dispfileCount = 21;
   #elif defined(_M5ATOMS3)||defined(USE_ST7735S)
   int dispfileCount = 15;
   #elif defined(USE_GC9107)
@@ -1831,11 +1861,17 @@ String selectMzt() {
       m5lcd.drawRect(220, 240 - 19, 100, 18, TFT_WHITE);
       m5lcd.drawCentreString("DOWN", 266, 240 - 17, 1);
   #else
+  #if !defined(_M5STAMP)
       m5lcd.drawString("LONG PRESS:SELECT", 0, 200 - 17, 1);
+  #endif
   #endif
       needRedraw = false;
     }
+#if defined(_TOOTHBRUSH)
+  //なにもしない 
+#else
     M5.update();
+
     //if (M5.BtnA.pressedFor(500)) {
     //  isLongPress = true;
     //  selectIndex--;
@@ -1988,8 +2024,10 @@ String selectMzt() {
     #else
     }
     #endif
+    #endif
     delay(100);
   }
+#endif
 }
 int setMztToMemory(String mztFile) {
 
@@ -2202,10 +2240,17 @@ int setMztToMemory(String mztFile) {
 #define SET_TO_MEMORY_INDEX 6
 #define SAVE_IMAGE_INDEX 7
 #define WONDER_HOUSE_MODE_INDEX 8
-#define PCG_OR_ROTATE_LCD_INDEX 9
+#define INPUT_0_INDEX 9
+#define INPUT_1_INDEX 10
+#define INPUT_2_INDEX 11
+#define INPUT_CR_INDEX 12
+#define PCG_OR_ROTATE_LCD_INDEX 13
 
 void systemMenu()
 {
+#if defined(_TOOTHBRUSH)
+  return;
+#else
   static String menuItem[] =
   {
     "[BACK]",
@@ -2214,9 +2259,13 @@ void systemMenu()
     "RESET:MZ-1Z009",
     "RESET:SP-1002",
     "SOUND",
-    "SET MZT TO MEMORY",
+    "SET MZTtoMEMORY",
     "SAVE MZT Image",
-    "Wonder House Mode",
+    "WonderHouseMode",
+    "INPUT[0]",
+    "INPUT[1]",
+    "INPUT[2]",
+    "INPUT[CR]",
   #if defined (USE_EXT_LCD)||defined(_M5ATOMS3)||defined(_M5ATOMS3LITE)
     "Rotate LCD",
   #elif defined(_M5STICKCPLUS)
@@ -2231,12 +2280,16 @@ void systemMenu()
   #if defined(_M5CARDPUTER)
     M5Cardputer.Speaker.stop();
   #endif
-
+  #if defined(USE_MIDI)
+	synth.setAllNotesOff(0);
+	#endif
   delay(10);
   m5lcd.fillScreen(TFT_BLACK);
   delay(10);
   #if defined(_M5STACK)
   m5lcd.setTextSize(2);
+  #elif defined(_M5STAMP)||defined(USE_ST7789)
+  m5lcd.setTextSize(1);
   #else
   m5lcd.setTextSize(1);
   #endif
@@ -2310,7 +2363,9 @@ void systemMenu()
       m5lcd.drawRect(220, 240 - 19, 100, 18, TFT_WHITE);
       m5lcd.drawCentreString("DOWN", 266, 240 - 17, 1);
       #else
-      m5lcd.drawString("LONG PRESS:SELECT", 0, 200 - 17, 1);
+      #if !defined(_M5STAMP)
+        m5lcd.drawString("LONG PRESS:SELECT", 0, 200 - 17, 1);
+      #endif
       #endif
       needRedraw = false;
     }
@@ -2365,6 +2420,7 @@ void systemMenu()
         delay(10);
         return;
       }
+      bool returnFlag = false;
       switch (selectIndex)
       {
         case 1:
@@ -2395,6 +2451,7 @@ void systemMenu()
           }else{
             wonderHouseMode = false;
           }
+          returnFlag = true;
           break;
         case PCG_OR_ROTATE_LCD_INDEX:
         #if defined (USE_EXT_LCD)||defined(_M5ATOMS3)
@@ -2405,11 +2462,27 @@ void systemMenu()
             lcdRotate = 0;
             m5lcd.setRotation(0);
           }
+          returnFlag = true;
         #else
           hw700.pcg700_mode = (hw700.pcg700_mode == 1) ? 0 : 1;
         #endif
           break;
-
+        case INPUT_0_INDEX:
+            inputStringEx = "0";
+            returnFlag = true;
+            break;
+        case INPUT_1_INDEX:
+            inputStringEx = "1";
+            returnFlag = true;
+            break;
+        case INPUT_2_INDEX:
+            inputStringEx = "2";
+            returnFlag = true;
+            break;
+        case INPUT_CR_INDEX:
+            inputStringMode = true; //このフラグによりCR が押下される
+            returnFlag = true;
+            break;
         default:
           m5lcd.fillScreen(TFT_BLACK);
           delay(10);
@@ -2426,6 +2499,12 @@ void systemMenu()
         firstLoadFlag = true;
         return;
       }
+      if(returnFlag == true){
+          m5lcd.fillScreen(TFT_BLACK);
+          delay(10);
+          return;
+      }
+
       m5lcd.fillScreen(TFT_BLACK);
       m5lcd.setCursor(0, 0);
       needRedraw = true;
@@ -2451,6 +2530,7 @@ void systemMenu()
 
     delay(100);
   }
+#endif
 }
 
 //https://github.com/tobozo/M5Stack-SD-Updater/blob/master/examples/M5Stack-SD-Menu/M5Stack-SD-Menu.ino

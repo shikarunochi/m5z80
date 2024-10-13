@@ -10,7 +10,7 @@
 #if defined(_M5STICKCPLUS)
 #include <M5GFX.h>
 #include <M5StickCPlus.h>
-#elif defined(_M5ATOMS3)||defined(_M5ATOMS3LITE)
+#elif defined(_M5ATOMS3)||defined(_M5ATOMS3LITE)||defined(_TOOTHBRUSH)
 #include <M5Unified.h>
 #elif defined(_M5STACK)
 #include <M5Stack.h>

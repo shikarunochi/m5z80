@@ -26,6 +26,8 @@
 #include <M5StackUpdater.h>	
 SPIClass SPI2;
 #define KEY_FN         0xff
+#elif defined(_TOOTHBRUSH)
+#include <M5Unified.h>
 #else
 #include <M5Atom.h>  
 #endif
@@ -45,12 +47,17 @@ M5GFX m5lcd;
 #elif defined(_M5STACK)
 M5GFX m5lcd;
 #elif defined(_M5STAMP)
-Button extBtn = Button(18, true, 10);
+//#define EX_BUTTON 18
+#define EX_BUTTON 39
+//Button extBtn = Button(18, true, 10);
+Button extBtn = Button(EX_BUTTON, true, 10);
 LGFX m5lcd;
 #elif  defined(_M5CARDPUTER)
 #include <Wire.h>
 
 M5GFX m5lcd;
+#elif defined(_TOOTHBRUSH)
+LGFX m5lcd;
 #else
 #ifdef USE_EXT_LCD
 LGFX m5lcd;
@@ -58,6 +65,12 @@ LGFX m5lcd;
 M5AtomDisplay m5lcd(320,200);                 // LGFXのインスタンスを作成。
 #endif
 #endif
+
+#if defined(USE_MIDI)
+#include <M5UnitSynth.h>
+M5UnitSynth synth;
+#endif
+
 int xorKey = 0x80;
 
 int lcdRotate = 0;
@@ -96,6 +109,11 @@ void setup() {
   Wire.begin(32,33);
   m5lcd.init();
   extBtn.read(); //extBtn 状態を一度クリアする
+  #elif defined(_TOOTHBRUSH)
+  auto cfg = M5.config();
+  cfg.internal_imu=false;
+  M5.begin(cfg);
+  m5lcd.init();
   #elif defined(_M5CARDPUTER)
   auto cfg = M5.config();
   M5Cardputer.begin(cfg, true);
@@ -132,30 +150,37 @@ void setup() {
   Wire.begin(26,32);
   #endif
   m5lcd.init();
+  m5lcd.clear();
   #endif
   
   Serial.println("MAIN_START");
   
-  #if !defined(_M5STICKCPLUS) && !defined(_M5STAMP)
-  if(digitalRead(39) == 0) { //M5Atom Button
-     Serial.println("RoteteMode:for extCRT");
-     strcpy(mzConfig.romFile, "1Z009.ROM"); //MZ-700 MODE
-     lcdRotate = 1;
-     //m5lcd.setRotation(2);
-  }
+  #if defined(MZ1D05_MODE)
+    if(digitalRead(39) != 0) { //M5Atom Button not press
+      strcpy(mzConfig.romFile, "1Z009.ROM"); //MZ-700 MODE
+    }
+  #else
+    #if !defined(_M5STICKCPLUS) && !defined(_M5STAMP)&& !defined(_TOOTHBRUSH)
+    if(digitalRead(39) == 0) { //M5Atom Button
+      Serial.println("RoteteMode:for extCRT");
+      strcpy(mzConfig.romFile, "1Z009.ROM"); //MZ-700 MODE
+      lcdRotate = 1;
+      //m5lcd.setRotation(2);
+    }
+    #endif
   #endif
 
   #if defined(_M5STAMP)
-  if(digitalRead(18) == 0) { //
+  if(digitalRead(EX_BUTTON) == 0) { //
      strcpy(mzConfig.romFile, "1Z009.ROM"); //MZ-700 MODE
   }
 
   #endif
   #if !defined(_M5STACK)
   if (!SPIFFS.begin()) {
-    M5.Lcd.println("FORMATTING SPIFFS...");
+    m5lcd.println("FORMATTING SPIFFS...");
     if (!SPIFFS.begin(true)) {
-      M5.Lcd.println("SPIFFS Mount Failed");
+      m5lcd.println("SPIFFS Mount Failed");
       Serial.println("SPIFFS Mount Failed");
       return;
     }
@@ -173,6 +198,11 @@ void setup() {
   ledcSetup(LEDC_CHANNEL_0, LEDC_BASE_FREQ, LEDC_TIMER_13_BIT);
   ledcAttachPin(SPEAKER_PIN, LEDC_CHANNEL_0);
 #endif  
+
+#if defined(USE_MIDI)
+    synth.begin(&Serial2, UNIT_SYNTH_BAUD, 16, 17);
+    synth.setInstrument(0, 0, 27);  // synth piano 1
+#endif
   mz80c_main();   
   exit(0);  
 }

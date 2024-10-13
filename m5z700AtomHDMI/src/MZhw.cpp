@@ -15,7 +15,7 @@
 #if defined(_M5STICKCPLUS)
 #include <M5GFX.h>
 #include <M5StickCPlus.h>
-#elif defined(_M5ATOMS3)||defined(_M5ATOMS3LITE)
+#elif defined(_M5ATOMS3)||defined(_M5ATOMS3LITE)||defined(_TOOTHBRUSH)
 #include <M5Unified.h>
 #elif defined(_M5STACK)
 #include <M5Stack.h>
@@ -390,7 +390,7 @@ void mz_keydown_sub(UINT8 code)
 	b = code & 0x0F;
 	keyports[n] &= (~(1 << b));
 }
-
+/*
 void mz_keydown(int code)
 {
 //	UINT8 *kptr = get_keymattbl_ptr() + (menu.keytype << 8);
@@ -408,7 +408,7 @@ void mz_keydown(int code)
 #endif
 
 }
-
+*/
 ////////////
 // WM_KEYUP
 ////////////
@@ -420,7 +420,7 @@ void mz_keyup_sub(UINT8 code)
 	b = code & 0x0F;
 	keyports[n] |= (1 << b);
 }
-
+/*
 void mz_keyup(int code)
 {
 //	UINT8 *kptr = get_keymattbl_ptr() + (menu.keytype << 8);
@@ -437,7 +437,7 @@ void mz_keyup(int code)
 //	printf("keyup : kptr = %02x idx%d bit%d\n", code, n, b);
 #endif
 }
-
+*/
 /* ＭＺをリセットする */
 void mz_reset(void)
 {
@@ -660,7 +660,7 @@ int pit_count(void)
 // 8253 SOUND
 /////////////////////////////////////////////////////////////////
 //
-#if defined(_M5CARDPUTER)
+#if defined(_M5CARDPUTER)||defined(USE_MIDI)
 int preFreqtmp = 0;
 #endif
 
@@ -681,6 +681,10 @@ void play8253(void)
 	#if defined(_M5CARDPUTER)
 	M5Cardputer.Speaker.stop();
 	#endif
+	#if defined(USE_MIDI)
+	synth.setAllNotesOff(0);
+	#endif
+
 	}
 	else
 	if (freqtmp>=0) {
@@ -712,6 +716,19 @@ void play8253(void)
 			M5Cardputer.Speaker.tone(0, 1000, 1);
 	}
 	#endif
+
+	#if defined(USE_MIDI)
+		if(freqtmp > 0){
+		if(preFreqtmp != freqtmp){
+			preFreqtmp = freqtmp;
+			synth.setNoteOn(0, (12.0*(log2((1000000 / freqtmp)/440.0))+69.0),127);
+			
+		}
+		}else{
+			synth.setAllNotesOff(0);
+		}
+	#endif
+
 	//ledcWriteTone(LEDC_CHANNEL_0, 500000 / freqtmp);
     }
     //Serial.print("PLAY:");

@@ -12,9 +12,9 @@ typedef struct
 } TDEFKEY_SECTION;
 
 int get_keymat_max(void);
-UINT8 * get_keymattbl_ptr(void);
+//UINT8 * get_keymattbl_ptr(void);
 
-int init_defkey(void);
-int end_defkey(void);
+//int init_defkey(void);
+//int end_defkey(void);
 
-int read_defkey(void);
+//int read_defkey(void);

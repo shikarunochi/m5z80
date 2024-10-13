@@ -130,8 +130,8 @@ void mz_reset(void);
 void mz_main(void);
 
 void mz_keyport_init(void);
-void mz_keydown(int);
-void mz_keyup(int);
+//void mz_keydown(int);
+//void mz_keyup(int);
 void mz_keydown_sub(UINT8);
 void mz_keyup_sub(UINT8);
 
